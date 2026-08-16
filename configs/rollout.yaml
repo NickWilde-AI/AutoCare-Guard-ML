@@ -1,0 +1,50 @@
+rollout:
+  default_stage: shadow
+  stages:
+    shadow:
+      traffic_percent: 1
+      model_actions: ["log_only"]
+      ban_requires_human_review: true
+      rollback_on_alert: true
+    small:
+      traffic_percent: 10
+      model_actions: ["ignore", "warning", "limit_account_candidate"]
+      ban_requires_human_review: true
+      rollback_on_alert: true
+    ramp:
+      traffic_percent: 50
+      model_actions: ["ignore", "warning", "limit_account_candidate"]
+      ban_requires_human_review: true
+      rollback_on_alert: true
+    full:
+      traffic_percent: 100
+      model_actions: ["ignore", "warning", "limit_account_candidate"]
+      ban_requires_human_review: true
+      rollback_on_alert: true
+
+ab_test:
+  enabled: false
+  control_model_version: heuristic-demo-v0
+  candidate_model_version: im-audit-judge-next
+  split_percent_candidate: 10
+  success_metrics:
+    - final_judgment_f1
+    - handling_macro_f1
+    - ban_account_fpr
+    - human_review_overturn_rate
+  guardrails:
+    ban_account_fpr_max: 0.03
+    parse_non_ok_rate_max: 0.02
+    p95_latency_ms_max: 1200
+
+human_review:
+  required_routes:
+    - human_review_required
+  required_handling_suggestions:
+    - ban_account
+  sample_policy:
+    limit_account_sample_rate: 0.2
+    warning_sample_rate: 0.02
+  review_sla_minutes:
+    high_risk: 30
+    mid_risk: 240

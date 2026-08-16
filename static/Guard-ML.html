@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IM Guard - 智能审核监控大盘</title>
+<style>
+:root {
+  --bg:#f8f9fb;--bg-card:#fff;--border:#e5e8ed;--text:#1a2233;--text-secondary:#6b7a90;
+  --accent-blue:#2563eb;--accent-green:#16a34a;--accent-red:#dc2626;--accent-orange:#d97706;--accent-purple:#7c3aed;
+  --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
+  --nav-bg:#fff;--row-hover:#f9fafb;--bar-bg:#f1f5f9;
+}
+body.dark {
+  --bg:#0f1117;--bg-card:#1a1d27;--border:#2a2d3a;--text:#e2e8f0;--text-secondary:#8892a4;
+  --shadow:0 1px 3px rgba(0,0,0,.4);--nav-bg:#13151f;--row-hover:#22253280;--bar-bg:#23263a;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Helvetica Neue',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;transition:background .3s,color .3s;}
+.topnav{display:flex;align-items:center;justify-content:space-between;padding:14px 32px;background:var(--nav-bg);border-bottom:1px solid var(--border);box-shadow:var(--shadow);}
+.topnav-left{display:flex;align-items:center;gap:12px;}
+.topnav-logo{width:32px;height:32px;background:linear-gradient(135deg,#2563eb,#7c3aed);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;}
+.topnav-title{font-size:16px;font-weight:600;}
+.topnav-env{font-size:11px;padding:3px 10px;background:#ecfdf5;color:var(--accent-green);border-radius:12px;font-weight:500;}
+.topnav-right{display:flex;align-items:center;gap:16px;font-size:12px;color:var(--text-secondary);}
+.status-dot{width:8px;height:8px;background:var(--accent-green);border-radius:50%;display:inline-block;margin-right:6px;animation:pulse 2s infinite;}
+.status-dot.offline{background:var(--accent-red);animation:none;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.dark-btn{cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-secondary);font-size:14px;transition:all .15s;}
+.dark-btn:hover{border-color:var(--accent-blue);}
+.main{padding:24px 32px;max-width:1440px;margin:0 auto;}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;margin-bottom:24px;}
+.kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:20px 24px;box-shadow:var(--shadow);transition:transform .15s;}
+.kpi:hover{transform:translateY(-1px);}
+.kpi-label{font-size:12px;color:var(--text-secondary);font-weight:500;margin-bottom:8px;}
+.kpi-value{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;transition:color .3s;}
+.kpi-sub{font-size:11px;color:var(--text-secondary);margin-top:6px;}
+.kpi-spark{margin-top:8px;height:28px;}
+.kpi-trend{font-size:11px;margin-top:6px;display:inline-block;padding:2px 6px;border-radius:4px;}
+.trend-good{background:#ecfdf5;color:var(--accent-green);}
+.trend-bad{background:#fef2f2;color:var(--accent-red);}
+.section{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:20px 24px;box-shadow:var(--shadow);margin-bottom:24px;}
+.section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.section-title{font-size:14px;font-weight:600;}
+.section-badge{font-size:11px;padding:3px 10px;border-radius:12px;background:#eff6ff;color:var(--accent-blue);font-weight:500;}
+.table{width:100%;border-collapse:collapse;}
+.table th{text-align:left;font-size:11px;color:var(--text-secondary);font-weight:500;padding:10px 12px;border-bottom:1px solid var(--border);}
+.table td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:13px;opacity:.9;}
+.table tr:last-child td{border-bottom:none;}
+.table tbody tr{cursor:pointer;transition:background .1s;}
+.table tbody tr:hover td{background:var(--row-hover);}
+.table tr.new-row td{animation:rowFlash .8s ease;}
+@keyframes rowFlash{0%{background:#eff6ff;}100%{background:transparent;}}
+.tag{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:500;}
+.tag-high{background:#fef2f2;color:var(--accent-red);}
+.tag-mid{background:#fffbeb;color:var(--accent-orange);}
+.tag-low{background:#ecfdf5;color:var(--accent-green);}
+.tag-ban{background:#fef2f2;color:var(--accent-red);}
+.tag-limit{background:#fffbeb;color:var(--accent-orange);}
+.tag-warning{background:#fffbeb;color:var(--accent-orange);}
+.tag-ignore{background:#ecfdf5;color:var(--accent-green);}
+.tag-human{background:#f5f3ff;color:var(--accent-purple);}
+.tag-auto{background:#ecfdf5;color:var(--accent-green);}
+.pipeline{display:flex;align-items:center;gap:6px;overflow-x:auto;padding:16px 0;}
+.pipe-node{background:var(--bar-bg);border:1px solid var(--border);border-radius:8px;padding:12px 16px;text-align:center;white-space:nowrap;}
+.pipe-node.active{border-color:var(--accent-green);background:#f0fdf4;}
+body.dark .pipe-node.active{background:#052e16;}
+.pipe-node-title{font-size:12px;font-weight:600;}
+.pipe-node-sub{font-size:10px;color:var(--text-secondary);margin-top:3px;}
+.pipe-arrow{color:#cbd5e1;font-size:16px;flex-shrink:0;}
+#areaChart path,#areaChart polyline{transition:d .6s ease,opacity .3s;}
+.metric-bar-container{margin-bottom:14px;}
+.metric-bar-header{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;}
+.metric-bar-label{color:var(--text-secondary);}
+.metric-bar-value{font-weight:600;}
+.metric-bar{height:8px;background:var(--bar-bg);border-radius:4px;overflow:hidden;}
+.metric-bar-fill{height:100%;border-radius:4px;transition:width .6s ease;}
+.alert-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;margin-bottom:8px;font-size:12px;}
+.alert-item.pass{background:#f0fdf4;border:1px solid #bbf7d0;}
+.alert-item.critical{background:#fef2f2;border:1px solid #fecaca;}
+body.dark .alert-item.pass{background:#052e16;border-color:#166534;}
+body.dark .alert-item.critical{background:#450a0a;border-color:#991b1b;}
+.connect-banner{padding:10px 32px;background:#fef2f2;border-bottom:1px solid #fecaca;font-size:12px;color:var(--accent-red);text-align:center;display:none;}
+.connect-banner.show{display:block;}
+.event-banner{padding:10px 32px;font-size:13px;font-weight:600;text-align:center;display:none;animation:bannerPulse 1s infinite;}
+.event-banner.show{display:block;}
+.event-banner.brush{background:#fef3c7;color:#92400e;border-bottom:2px solid #fbbf24;}
+.event-banner.fraud{background:#fef2f2;color:#991b1b;border-bottom:2px solid #f87171;}
+.event-banner.porn{background:#fdf4ff;color:#6b21a8;border-bottom:2px solid #c084fc;}
+@keyframes bannerPulse{0%,100%{opacity:1;}50%{opacity:.7;}}
+.window-tabs{display:flex;gap:6px;}
+.window-tab{padding:4px 14px;border-radius:16px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--text-secondary);transition:all .15s;}
+.window-tab:hover{border-color:var(--accent-blue);color:var(--accent-blue);}
+.window-tab.active{background:var(--accent-blue);color:#fff;border-color:var(--accent-blue);}
+.speed-control{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-secondary);}
+.speed-control input[type=range]{width:120px;accent-color:var(--accent-blue);}
+.topic-row{margin-bottom:12px;}
+.topic-row-header{display:flex;align-items:center;gap:10px;margin-bottom:4px;cursor:pointer;}
+.topic-row-name{width:90px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0;}
+.topic-row-bar-wrap{flex:1;height:16px;background:var(--bar-bg);border-radius:4px;overflow:hidden;}
+.topic-row-bar{height:100%;border-radius:4px;transition:width .6s;}
+.topic-row-pct{width:42px;text-align:right;font-size:11px;font-weight:600;flex-shrink:0;}
+.topic-detail{display:none;padding:6px 10px 6px 100px;}
+.topic-detail.open{display:block;}
+.topic-mini-label{font-size:10px;color:var(--text-secondary);margin-bottom:3px;}
+.topic-mini-bar{display:flex;height:10px;border-radius:3px;overflow:hidden;margin-bottom:6px;}
+/* 工单详情弹窗 */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:1000;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:560px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.modal-title{font-size:15px;font-weight:600;}
+.modal-close{cursor:pointer;font-size:20px;color:var(--text-secondary);line-height:1;}
+.modal-field{margin-bottom:12px;}
+.modal-field-label{font-size:11px;color:var(--text-secondary);margin-bottom:4px;font-weight:500;}
+.modal-field-value{font-size:13px;line-height:1.6;background:var(--bar-bg);padding:8px 12px;border-radius:6px;}
+/* 延迟仪表盘 */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;margin-bottom:12px;}
+.gauge-val{font-size:28px;font-weight:700;margin-top:-10px;}
+.gauge-label{font-size:11px;color:var(--text-secondary);}
+@media(max-width:1024px){.grid-4{grid-template-columns:repeat(2,1fr);}.grid-2,.grid-3{grid-template-columns:1fr;}}
+@media(max-width:640px){.grid-4{grid-template-columns:1fr;}.main{padding:16px;}}
+</style>
+</head>
+<body>
+<nav class="topnav">
+  <div class="topnav-left">
+    <div class="topnav-logo">G</div>
+    <span class="topnav-title">IM Guard 智能审核监控大盘</span>
+    <span class="topnav-env">生产环境</span>
+  </div>
+  <div class="topnav-right">
+    <span><span class="status-dot" id="statusDot"></span><span id="statusText">连接中...</span></span>
+    <span id="modelInfo">-</span>
+    <span id="uptimeInfo">-</span>
+    <span class="dark-btn" onclick="toggleDark()" id="darkBtn">🌙</span>
+  </div>
+</nav>
+<div class="connect-banner" id="connectBanner"></div>
+<div class="event-banner" id="eventBanner"></div>
+
+<div class="main">
+  <div class="grid-4">
+    <div class="kpi">
+      <div class="kpi-label">累计审核请求</div>
+      <div class="kpi-value" id="valTotal">-</div>
+      <div class="kpi-sub" id="subThroughput">-</div>
+      <svg class="kpi-spark" id="sparkTotal" width="100%" height="28"></svg>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">违规判定</div>
+      <div class="kpi-value" style="color:var(--accent-red)" id="valViolation">-</div>
+      <div class="kpi-sub" id="subViolation">-</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">安全放行</div>
+      <div class="kpi-value" style="color:var(--accent-green)" id="valSafe">-</div>
+      <div class="kpi-trend trend-good" id="trendSafe">-</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">人工复核队列</div>
+      <div class="kpi-value" style="color:var(--accent-purple)" id="valHuman">-</div>
+      <div class="kpi-sub" id="subBanRate">-</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-header">
+      <span class="section-title">推理链路</span>
+      <span class="section-badge" id="latencyBadge">平均延迟: -</span>
+    </div>
+    <div class="pipeline">
+      <div class="pipe-node active"><div class="pipe-node-title">IM 后端</div><div class="pipe-node-sub">gRPC / HTTP</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-node active"><div class="pipe-node-title">证据聚合</div><div class="pipe-node-sub">聊天+行为+场景</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-node active"><div class="pipe-node-title">Prompt 渲染</div><div class="pipe-node-sub">Rubric+策略表</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-node active"><div class="pipe-node-title">LLM 推理</div><div class="pipe-node-sub">vLLM · TP=4</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-node active"><div class="pipe-node-title">后处理</div><div class="pipe-node-sub">校验+纠错+兜底</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-node active"><div class="pipe-node-title">策略路由</div><div class="pipe-node-sub">自动/人审/封禁</div></div>
+      <span class="pipe-arrow">→</span>
+      <div class="pipe-node active"><div class="pipe-node-title">审计监控</div><div class="pipe-node-sub">日志+指标+告警</div></div>
+    </div>
+  </div>
+
+  <div class="section" style="padding:12px 24px;margin-bottom:24px;">
+    <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;color:var(--text-secondary);font-weight:500;">时间窗口</span>
+        <div class="window-tabs">
+          <div class="window-tab active" data-w="all" onclick="setWindow('all')">全量</div>
+          <div class="window-tab" data-w="1h" onclick="setWindow('1h')">近1小时</div>
+          <div class="window-tab" data-w="5m" onclick="setWindow('5m')">近5分钟</div>
+        </div>
+        <span style="font-size:11px;color:var(--text-secondary);" id="windowHint">显示全部数据</span>
+      </div>
+      <div class="speed-control">
+        <span>模拟速率</span>
+        <input type="range" id="speedSlider" min="1" max="10" step="1" value="5" oninput="onSpeedChange(this.value)">
+        <span id="speedLabel" style="min-width:60px;">中速</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">实时审核结果 <span style="font-size:11px;color:var(--text-secondary);font-weight:400;">点击行查看详情</span></span>
+        <span class="section-badge" id="liveBadge">实时</span>
+      </div>
+      <table class="table">
+        <thead><tr><th>时间</th><th>工单</th><th>风险</th><th>主题</th><th>处置</th><th>路由</th><th>延迟</th></tr></thead>
+        <tbody id="resultTable"><tr><td colspan="7" style="text-align:center;color:var(--text-secondary);padding:32px;">等待审核数据...</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">处置分布</span>
+        <span class="section-badge" id="distBadge">-</span>
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;height:28px;border-radius:6px;overflow:hidden;background:var(--bar-bg);">
+          <div style="background:#4ade80;transition:width .6s;" id="ratioGreen"></div>
+          <div style="background:#fbbf24;transition:width .6s;" id="ratioOrange"></div>
+          <div style="background:#f87171;transition:width .6s;" id="ratioRed"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--text-secondary);">
+          <span>忽略 <b id="rateIgnore" style="color:var(--accent-green)">-</b></span>
+          <span>警告+限号 <b id="rateWarn" style="color:var(--accent-orange)">-</b></span>
+          <span>封禁 <b id="rateBan" style="color:var(--accent-red)">-</b></span>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">处置趋势</div>
+      <svg id="areaChart" width="100%" height="120" style="display:block;" preserveAspectRatio="none"></svg>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:var(--text-secondary);"><span>← 历史</span><span>最新 →</span></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">违规主题分布（点击展开下钻）</span>
+        <span class="section-badge" id="topicBadge">-</span>
+      </div>
+      <div id="topicList" style="font-size:12px;color:var(--text-secondary);">等待数据...</div>
+    </div>
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">推理延迟</span>
+        <span class="section-badge" id="latP99Badge">-</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="gauge-wrap">
+          <svg width="120" height="70" id="gaugeP95"></svg>
+          <div class="gauge-val" id="gaugeP95Val">-</div>
+          <div class="gauge-label">P95 延迟 (ms)</div>
+        </div>
+        <div class="gauge-wrap">
+          <svg width="120" height="70" id="gaugeP99"></svg>
+          <div class="gauge-val" id="gaugeP99Val">-</div>
+          <div class="gauge-label">P99 延迟 (ms)</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+        <div><div style="font-size:18px;font-weight:700;color:var(--accent-blue)" id="latAvg">-</div><div style="font-size:10px;color:var(--text-secondary)">平均</div></div>
+        <div><div style="font-size:18px;font-weight:700;" id="latP50">-</div><div style="font-size:10px;color:var(--text-secondary)">P50</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:var(--accent-orange)" id="latP95">-</div><div style="font-size:10px;color:var(--text-secondary)">P95</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:var(--accent-red)" id="latP99">-</div><div style="font-size:10px;color:var(--text-secondary)">P99</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-3">
+    <div class="section">
+      <div class="section-header"><span class="section-title">离线评测</span><span class="section-badge">未加载</span></div>
+      <div style="padding:16px;color:var(--text-secondary);line-height:1.8;">公开仓库不内置内部测试集或模型效果数据。请使用自备的合规评测集运行 <code>eval-report</code>，并记录数据版本、模型版本与运行环境。</div>
+    </div>
+    <div class="section">
+      <div class="section-header"><span class="section-title">质量守卫</span><span class="section-badge" id="guardBadge">检测中</span></div>
+      <div id="guardList"><div class="alert-item pass"><span>⏳</span><span>等待数据积累 (≥10条)...</span></div></div>
+    </div>
+    <div class="section">
+      <div class="section-header"><span class="section-title">系统信息</span></div>
+      <table class="table">
+        <tbody>
+          <tr><td style="color:var(--text-secondary);width:90px;">推理模式</td><td id="sysModel">-</td></tr>
+          <tr><td style="color:var(--text-secondary)">运行时间</td><td id="sysUptime">-</td></tr>
+          <tr><td style="color:var(--text-secondary)">数据源</td><td>simulator.py</td></tr>
+          <tr><td style="color:var(--text-secondary)">刷新频率</td><td>2 秒</td></tr>
+          <tr><td style="color:var(--text-secondary)">后端地址</td><td id="sysEndpoint">-</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 工单详情弹窗 -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle">工单详情</span>
+      <span class="modal-close" onclick="closeModal()">×</span>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+<script>
+const API_BASE='http://127.0.0.1:8000';
+let prevTotal=0,currentWindow='all',sparkData=[],recentCache=[];
+
+// 从 sessionStorage 恢复图表数据
+let chartData=[];
+try{const s=sessionStorage.getItem('chartData');if(s)chartData=JSON.parse(s);}catch(e){}
+function saveChartData(){try{sessionStorage.setItem('chartData',JSON.stringify(chartData.slice(-60)));}catch(e){}}
+
+// 暗色模式
+function toggleDark(){
+  document.body.classList.toggle('dark');
+  document.getElementById('darkBtn').textContent=document.body.classList.contains('dark')?'☀️':'🌙';
+  localStorage.setItem('dark',document.body.classList.contains('dark')?'1':'0');
+}
+if(localStorage.getItem('dark')==='1')toggleDark();
+
+// 时间窗口
+function setWindow(w){
+  currentWindow=w;
+  document.querySelectorAll('.window-tab').forEach(t=>t.classList.toggle('active',t.dataset.w===w));
+  const hints={all:'显示全部数据','1h':'近1小时','5m':'近5分钟'};
+  document.getElementById('windowHint').textContent=hints[w]||'';
+  chartData=[];prevTotal=0;refresh();
+}
+
+// 速率控制
+const speedMap={1:3.0,2:2.0,3:1.5,4:1.0,5:0.5,6:0.3,7:0.2,8:0.15,9:0.1,10:0.05};
+const speedNames={1:'极慢',2:'很慢',3:'慢',4:'较慢',5:'中速',6:'较快',7:'快',8:'很快',9:'极快',10:'全速'};
+function onSpeedChange(v){
+  document.getElementById('speedLabel').textContent=speedNames[v]||v;
+  const interval=speedMap[v]||0.3;
+  fetch(API_BASE+'/simulator/speed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({interval})}).catch(()=>{});
+}
+
+// tag helpers
+function riskTag(l){const m={high_risk:['高风险','tag-high'],mid_risk:['中风险','tag-mid'],low_risk:['低风险','tag-low']};const[t,c]=m[l]||['未知','tag-low'];return`<span class="tag ${c}">${t}</span>`}
+function handleTag(h){const m={ban_account:['封禁','tag-ban'],limit_account:['限号','tag-limit'],warning:['警告','tag-warning'],ignore:['忽略','tag-ignore']};const[t,c]=m[h]||[h,''];return`<span class="tag ${c}">${t}</span>`}
+function routeTag(r){const m={human_review_required:['人工复核','tag-human'],auto_close:['自动关闭','tag-auto'],auto_action:['自动执行','tag-auto'],policy_action:['策略执行','tag-auto']};const[t,c]=m[r]||[r,''];return`<span class="tag ${c}">${t}</span>`}
+function fmtTime(s){if(s<60)return s+'秒';if(s<3600)return Math.floor(s/60)+'分'+s%60+'秒';return Math.floor(s/3600)+'时'+Math.floor(s%3600/60)+'分'}
+
+// 数字滚动动效
+function animateNum(el,target){
+  const from=parseInt(el.dataset.val||'0');el.dataset.val=target;
+  if(from===target)return;
+  const steps=12,dur=400,inc=(target-from)/steps;let cur=from,i=0;
+  const t=setInterval(()=>{cur+=inc;i++;el.textContent=Math.round(i===steps?target:cur).toLocaleString();if(i>=steps)clearInterval(t);},dur/steps);
+}
+
+// 工单详情弹窗
+function showDetail(idx){
+  const x=recentCache[idx];if(!x)return;
+  document.getElementById('modalTitle').textContent='工单 '+x.ticket_id;
+  document.getElementById('modalBody').innerHTML=`
+    <div class="modal-field"><div class="modal-field-label">时间</div><div class="modal-field-value">${x.timestamp||'-'}</div></div>
+    <div class="modal-field"><div class="modal-field-label">风险等级</div><div class="modal-field-value">${riskTag(x.risk_level)} ${x.risk_level}</div></div>
+    <div class="modal-field"><div class="modal-field-label">违规主题</div><div class="modal-field-value">${x.topic||'-'}</div></div>
+    <div class="modal-field"><div class="modal-field-label">处置建议</div><div class="modal-field-value">${handleTag(x.handling_suggestion)}</div></div>
+    <div class="modal-field"><div class="modal-field-label">路由</div><div class="modal-field-value">${routeTag(x.route)}</div></div>
+    <div class="modal-field"><div class="modal-field-label">推理延迟</div><div class="modal-field-value">${x.latency_ms} ms</div></div>
+    ${x.correlation_analysis?`<div class="modal-field"><div class="modal-field-label">关联分析</div><div class="modal-field-value">${x.correlation_analysis}</div></div>`:''}
+    ${x.judgment_basis?`<div class="modal-field"><div class="modal-field-label">判定依据</div><div class="modal-field-value">${x.judgment_basis}</div></div>`:''}
+  `;
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal(e){if(!e||e.target===document.getElementById('modalOverlay'))document.getElementById('modalOverlay').classList.remove('show');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+// 突发事件检测
+let lastBanRate=0,eventTimer=0;
+function detectEvent(c,total){
+  if(total<20)return;
+  const br=c.ban_total/total;
+  const banner=document.getElementById('eventBanner');
+  if(br>0.25&&br>lastBanRate+0.05){
+    banner.textContent='⚡ 检测到封禁率异常飙升 — 疑似代刷团伙或引流机器人批量上线';
+    banner.className='event-banner show brush';
+    clearTimeout(eventTimer);eventTimer=setTimeout(()=>banner.className='event-banner',8000);
+  } else if(c.human_review_total/total>0.2){
+    // 人工复核队列积压提示已移除
+  }
+  lastBanRate=br;
+}
+
+// 延迟仪表盘
+function drawGauge(svgId,valId,ms,maxMs){
+  const svg=document.getElementById(svgId);
+  const val=document.getElementById(valId);
+  if(!svg)return;
+  const w=120,h=70,cx=60,cy=65,r=50;
+  const pct=Math.min(ms/maxMs,1);
+  const startAngle=Math.PI,endAngle=2*Math.PI;
+  const angle=startAngle+pct*(endAngle-startAngle);
+  const color=pct<0.5?'#4ade80':pct<0.8?'#fbbf24':'#f87171';
+  const x1=cx+r*Math.cos(startAngle),y1=cy+r*Math.sin(startAngle);
+  const x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);
+  const large=pct>0.5?1:0;
+  const isDark=document.body.classList.contains('dark');
+  const trackColor=isDark?'#23263a':'#f1f5f9';
+  svg.innerHTML=`
+    <path d="M${x1},${y1} A${r},${r} 0 1,1 ${cx+r},${cy}" fill="none" stroke="${trackColor}" stroke-width="10" stroke-linecap="round"/>
+    <path d="M${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2}" fill="none" stroke="${color}" stroke-width="10" stroke-linecap="round"/>
+  `;
+  val.textContent=ms+'ms';
+  val.style.color=color;
+}
+
+// 迷你火花线
+function drawSparkline(svgId,data){
+  const svg=document.getElementById(svgId);if(!svg||data.length<2)return;
+  const w=svg.clientWidth||200,h=28,pad=2;
+  const max=Math.max(...data,1),min=Math.min(...data,0);
+  const pts=data.map((v,i)=>{
+    const x=(pad+i/(data.length-1)*(w-pad*2)).toFixed(1);
+    const y=(pad+(1-(v-min)/(max-min||1))*(h-pad*2)).toFixed(1);
+    return`${x},${y}`;
+  }).join(' ');
+  const isDark=document.body.classList.contains('dark');
+  svg.innerHTML=`<polyline points="${pts}" fill="none" stroke="${isDark?'#60a5fa':'#2563eb'}" stroke-width="1.5" opacity="0.7"/>`;
+}
+
+// 堆叠面积图
+function renderAreaChart(){
+  const svg=document.getElementById('areaChart');
+  const w=svg.clientWidth||500,h=120,pad=2;
+  if(!svg.dataset.init){
+    svg.innerHTML=`
+      <path id="areaIgnore" fill="#86efac" opacity="0.7" d=""/>
+      <path id="areaWarn" fill="#fcd34d" opacity="0.7" d=""/>
+      <path id="areaBan" fill="#fca5a5" opacity="0.7" d=""/>
+      <polyline id="lineBan" fill="none" stroke="#ef4444" stroke-width="1.5" opacity="0.6" points=""/>
+      <text id="chartWait" x="50%" y="60" text-anchor="middle" fill="#94a3b8" font-size="12">数据积累中...</text>
+    `;
+    svg.dataset.init='1';
+  }
+  if(chartData.length<3){document.getElementById('chartWait').style.opacity='1';return;}
+  document.getElementById('chartWait').style.opacity='0';
+  const n=chartData.length;
+  const maxT=Math.max(...chartData.map(d=>d.ignore+d.warn+d.ban),1);
+  function getY(v){return h-pad-(v/maxT)*(h-pad*2);}
+  let pI='',pW='',pB='',pts='',iRev='',wRev='';
+  for(let i=0;i<n;i++){
+    const x=(pad+i/(n-1)*(w-pad*2)).toFixed(1);
+    const d=chartData[i];
+    const yI=getY(d.ignore).toFixed(1),yW=getY(d.ignore+d.warn).toFixed(1),yB=getY(d.ignore+d.warn+d.ban).toFixed(1);
+    if(i===0){pI+=`M${x},${yI}`;pW+=`M${x},${yW}`;pB+=`M${x},${yB}`;}
+    else{pI+=`L${x},${yI}`;pW+=`L${x},${yW}`;pB+=`L${x},${yB}`;}
+    pts+=`${x},${yB} `;
+  }
+  const lastX=(pad+(n-1)/(n-1)*(w-pad*2)).toFixed(1),firstX=pad.toFixed(1),yBase=(h-pad).toFixed(1);
+  for(let i=n-1;i>=0;i--){const x=(pad+i/(n-1)*(w-pad*2)).toFixed(1);iRev+=`L${x},${getY(chartData[i].ignore).toFixed(1)}`;wRev+=`L${x},${getY(chartData[i].ignore+chartData[i].warn).toFixed(1)}`;}
+  document.getElementById('areaIgnore').setAttribute('d',pI+`L${lastX},${yBase}L${firstX},${yBase}Z`);
+  document.getElementById('areaWarn').setAttribute('d',pW+iRev+'Z');
+  document.getElementById('areaBan').setAttribute('d',pB+wRev+'Z');
+  document.getElementById('lineBan').setAttribute('points',pts.trim());
+}
+
+function toggleDetail(uid){
+  const el=document.getElementById(uid);if(!el)return;
+  el.classList.toggle('open');
+  const arrow=el.previousElementSibling.querySelector('span:last-child');
+  if(arrow)arrow.textContent=el.classList.contains('open')?'▾':'▸';
+}
+
+async function refresh(){
+  try{
+    const r=await fetch(API_BASE+'/dashboard/data?window='+currentWindow);
+    if(!r.ok)throw new Error(r.status);
+    const d=await r.json();
+    document.getElementById('statusDot').className='status-dot';
+    document.getElementById('statusText').textContent='系统正常';
+    document.getElementById('connectBanner').className='connect-banner';
+    const c=d.counters,total=c.requests_total,violation=c.ban_total+c.limit_total+c.warning_total;
+
+    animateNum(document.getElementById('valTotal'),total);
+    animateNum(document.getElementById('valViolation'),violation);
+    animateNum(document.getElementById('valSafe'),c.ignore_total);
+    animateNum(document.getElementById('valHuman'),c.human_review_total);
+
+    const qps=total>0?Math.round(total/Math.max(d.uptime_seconds,1)*60):0;
+    document.getElementById('subThroughput').textContent=`吞吐: ${qps} 条/分钟`;
+    document.getElementById('subViolation').textContent=`封禁 ${c.ban_total} · 限号 ${c.limit_total} · 警告 ${c.warning_total}`;
+    if(total>0){
+      const sr=(c.ignore_total/total*100).toFixed(1);
+      document.getElementById('trendSafe').textContent=`${sr}% 安全率`;
+      document.getElementById('trendSafe').className=`kpi-trend ${parseFloat(sr)>70?'trend-good':'trend-bad'}`;
+    }
+    document.getElementById('subBanRate').textContent=`封禁率: ${total>0?(c.ban_total/total*100).toFixed(1):0}% (阈值<12%)`;
+
+    // 火花线
+    sparkData.push(qps);if(sparkData.length>30)sparkData.shift();
+    drawSparkline('sparkTotal',sparkData);
+
+    // 突发事件
+    detectEvent(c,total);
+
+    // 延迟badge
+    if(d.recent&&d.recent.length>0){
+      const avg=d.recent.reduce((s,x)=>s+(x.latency_ms||0),0)/d.recent.length;
+      document.getElementById('latencyBadge').textContent=`平均延迟: ${avg.toFixed(0)}ms`;
+    }
+
+    // 结果列表
+    recentCache=d.recent||[];
+    if(recentCache.length>0){
+      document.getElementById('resultTable').innerHTML=recentCache.slice(0,10).map((x,i)=>`
+        <tr class="${i===0&&total>prevTotal?'new-row':''}" onclick="showDetail(${i})">
+          <td style="font-size:11px;color:var(--text-secondary)">${x.timestamp?x.timestamp.slice(11):'-'}</td>
+          <td style="font-family:monospace;font-size:10px;">${x.ticket_id.slice(-10)}</td>
+          <td>${riskTag(x.risk_level)}</td>
+          <td style="font-size:12px;">${x.topic}</td>
+          <td>${handleTag(x.handling_suggestion)}</td>
+          <td>${routeTag(x.route)}</td>
+          <td style="font-size:11px;color:var(--text-secondary)">${x.latency_ms}ms</td>
+        </tr>`).join('');
+    }
+
+    // 图表增量
+    if(total>prevTotal){
+      const prev=chartData.length>0?chartData[chartData.length-1]._cum:{i:0,w:0,b:0};
+      chartData.push({ignore:c.ignore_total-prev.i,warn:(c.warning_total+c.limit_total)-prev.w,ban:c.ban_total-prev.b,_cum:{i:c.ignore_total,w:c.warning_total+c.limit_total,b:c.ban_total}});
+      if(chartData.length>60)chartData.shift();
+      saveChartData();
+    }
+
+    // 比例条
+    if(total>0){
+      const ig=(c.ignore_total/total*100).toFixed(1),wl=((c.warning_total+c.limit_total)/total*100).toFixed(1),bn=(c.ban_total/total*100).toFixed(1);
+      document.getElementById('ratioGreen').style.width=ig+'%';
+      document.getElementById('ratioOrange').style.width=wl+'%';
+      document.getElementById('ratioRed').style.width=bn+'%';
+      document.getElementById('rateIgnore').textContent=ig+'%';
+      document.getElementById('rateWarn').textContent=wl+'%';
+      document.getElementById('rateBan').textContent=bn+'%';
+      document.getElementById('distBadge').textContent=`共 ${total} 条`;
+    }
+    renderAreaChart();
+
+    // 质量守卫
+    if(total>=10){
+      const br=c.ban_total/total,pr=c.parse_non_ok_total/total,vr=violation/total;
+      const guards=[{name:`封禁率 ${(br*100).toFixed(1)}%`,pass:br<0.12,th:'<12%'},{name:`解析错误率 ${(pr*100).toFixed(1)}%`,pass:pr<0.05,th:'<5%'},{name:`违规率 ${(vr*100).toFixed(1)}%`,pass:vr<0.5,th:'<50%'}];
+      const ok=guards.every(g=>g.pass);
+      document.getElementById('guardBadge').textContent=ok?'全部通过':'告警';
+      document.getElementById('guardBadge').style.cssText=ok?'background:#ecfdf5;color:var(--accent-green)':'background:#fef2f2;color:var(--accent-red)';
+      document.getElementById('guardList').innerHTML=guards.map(g=>`<div class="alert-item ${g.pass?'pass':'critical'}"><span>${g.pass?'✓':'✗'}</span><span>${g.name} (阈值: ${g.th})</span></div>`).join('');
+    }
+
+    // 系统信息
+    const modeMap={'checkpoint':'本地 checkpoint','api':'外部模型 API','heuristic':'HeuristicJudge (公开规则基线)'};
+    document.getElementById('sysModel').textContent=modeMap[d.model_mode]||d.model_mode;
+    document.getElementById('modelInfo').textContent=d.model_mode==='checkpoint'?'本地 checkpoint':d.model_mode==='api'?'模型 API':'公开规则基线';
+    document.getElementById('sysUptime').textContent=fmtTime(d.uptime_seconds);
+    document.getElementById('uptimeInfo').textContent='运行 '+fmtTime(d.uptime_seconds);
+    document.getElementById('sysEndpoint').textContent=API_BASE;
+
+    // 主题下钻
+    if(d.topic_breakdown&&Object.keys(d.topic_breakdown).length>0){
+      const bd=d.topic_breakdown,tt=Object.values(bd).reduce((a,b)=>a+b.count,0);
+      const colors=['#2563eb','#dc2626','#d97706','#16a34a','#7c3aed','#0891b2','#be185d','#4f46e5','#ca8a04','#0d9488','#9333ea','#e11d48','#64748b'];
+      document.getElementById('topicBadge').textContent=`${Object.keys(bd).length} 个主题`;
+      document.getElementById('topicList').innerHTML=Object.entries(bd).slice(0,13).map(([name,stat],i)=>{
+        const pct=(stat.count/tt*100).toFixed(1),color=colors[i%colors.length];
+        const r=stat.risk,h=stat.handling,rT=r.low_risk+r.mid_risk+r.high_risk||1,hT=h.ignore+h.warning+h.limit_account+h.ban_account||1;
+        const uid='td-'+i;
+        return`<div class="topic-row"><div class="topic-row-header" onclick="toggleDetail('${uid}')">
+          <span class="topic-row-name" title="${name}">${name}</span>
+          <div class="topic-row-bar-wrap"><div class="topic-row-bar" style="width:${pct}%;background:${color};opacity:.8;"></div></div>
+          <span class="topic-row-pct" style="color:${color}">${pct}%</span>
+          <span style="font-size:10px;color:var(--text-secondary);flex-shrink:0;">▸</span>
+        </div>
+        <div class="topic-detail" id="${uid}">
+          <div class="topic-mini-label">风险分布 low/mid/high</div>
+          <div class="topic-mini-bar">
+            <div style="width:${(r.low_risk/rT*100).toFixed(1)}%;background:#4ade80;" title="低风险 ${r.low_risk}"></div>
+            <div style="width:${(r.mid_risk/rT*100).toFixed(1)}%;background:#fbbf24;" title="中风险 ${r.mid_risk}"></div>
+            <div style="width:${(r.high_risk/rT*100).toFixed(1)}%;background:#f87171;" title="高风险 ${r.high_risk}"></div>
+          </div>
+          <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">低 ${r.low_risk} · 中 ${r.mid_risk} · 高 ${r.high_risk}</div>
+          <div class="topic-mini-label">处置分布</div>
+          <div class="topic-mini-bar">
+            <div style="width:${(h.ignore/hT*100).toFixed(1)}%;background:#4ade80;"></div>
+            <div style="width:${(h.warning/hT*100).toFixed(1)}%;background:#fbbf24;"></div>
+            <div style="width:${(h.limit_account/hT*100).toFixed(1)}%;background:#fb923c;"></div>
+            <div style="width:${(h.ban_account/hT*100).toFixed(1)}%;background:#f87171;"></div>
+          </div>
+          <div style="font-size:10px;color:var(--text-secondary);">忽略 ${h.ignore} · 警告 ${h.warning} · 限号 ${h.limit_account} · 封禁 ${h.ban_account}</div>
+        </div></div>`;
+      }).join('');
+    }
+
+    // 延迟仪表盘 + 数字
+    if(d.latency&&d.latency.avg){
+      const lat=d.latency;
+      drawGauge('gaugeP95','gaugeP95Val',lat.p95,2000);
+      drawGauge('gaugeP99','gaugeP99Val',lat.p99,2000);
+      document.getElementById('latAvg').textContent=lat.avg+'ms';
+      document.getElementById('latP50').textContent=lat.p50+'ms';
+      document.getElementById('latP95').textContent=lat.p95+'ms';
+      document.getElementById('latP99').textContent=lat.p99+'ms';
+      document.getElementById('latP99Badge').textContent=`P99: ${lat.p99}ms`;
+    }
+
+    prevTotal=total;
+  }catch(e){
+    document.getElementById('statusDot').className='status-dot offline';
+    document.getElementById('statusText').textContent='连接断开';
+    const b=document.getElementById('connectBanner');
+    b.className='connect-banner show';
+    b.textContent=`无法连接后端 (${API_BASE})，请确认已执行: make serve`;
+  }
+}
+
+refresh();
+setInterval(refresh,2000);
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+services:
+  im-guard-api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: ai-im-guard-ml:latest
+    working_dir: /app
+    volumes:
+      - ../outputs:/app/outputs
+    env_file:
+      - audit_service.env.example
+    command: >
+      sh -c '
+        if [ -n "$${IM_GUARD_MODEL_PATH}" ] && [ -e "$${IM_GUARD_MODEL_PATH}" ]; then
+          im-guard --config "$${IM_GUARD_CONFIG:-configs/default.yaml}" serve --host "$${IM_GUARD_HOST:-0.0.0.0}" --port "$${IM_GUARD_PORT:-8000}" --model-path "$${IM_GUARD_MODEL_PATH}";
+        else
+          im-guard --config "$${IM_GUARD_CONFIG:-configs/default.yaml}" serve --host "$${IM_GUARD_HOST:-0.0.0.0}" --port "$${IM_GUARD_PORT:-8000}";
+        fi
+      '
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  vllm-judge:
+    image: vllm/vllm-openai:latest
+    ipc: host
+    volumes:
+      - ../outputs:/app/outputs
+      - ./vllm_serve.sh:/app/deploy/vllm_serve.sh:ro
+    working_dir: /app
+    environment:
+      MODEL_PATH: /app/outputs/im-audit-judge
+      SERVED_MODEL_NAME: im-audit-judge
+      TP_SIZE: "4"
+      MAX_MODEL_LEN: "8192"
+    command: bash /app/deploy/vllm_serve.sh
+    ports:
+      - "8001:8001"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]

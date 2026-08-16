@@ -1,0 +1,21 @@
+registry_version: public-example-v1
+current_stable: heuristic-public-v0
+candidate: ""
+
+# Schema example only. This is not an internal registry export, a model-quality
+# report, or evidence of a production approval.
+models:
+  - model_version: heuristic-public-v0
+    status: stable
+    model_path: ""
+    prompt_version: prompt-v1
+    rubric_version: rubric-v1
+    feature_schema_version: feature-schema-v1
+    postprocess_version: postprocess-v1
+    train_data_version: user-provided
+    eval_data_version: user-provided
+    approved_by: public-example
+    approved_at: not-applicable
+    rollback_to: ""
+    metrics: {}
+    notes: "Deterministic public rule baseline for engineering verification only."

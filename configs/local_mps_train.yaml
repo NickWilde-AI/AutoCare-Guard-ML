@@ -1,0 +1,31 @@
+model:
+  base_model: Qwen/Qwen2.5-0.5B-Instruct
+  max_seq_length: 512
+  max_new_tokens: 256
+  do_sample: false
+
+training:
+  output_dir: outputs/im-audit-judge-local-mps
+  num_train_epochs: 1
+  learning_rate: 0.00002
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 16
+  warmup_ratio: 0.03
+  bf16: false
+  gradient_checkpointing: false
+  completion_only: true
+  enable_field_loss_mask: true
+  peft:
+    enabled: true
+    method: lora
+    r: 8
+    lora_alpha: 16
+    lora_dropout: 0.05
+    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+    qlora_4bit: false
+
+rubrics:
+  __default__: |
+    low_risk: 风险极低，日常社交或证据不足；
+    mid_risk: 中等风险，语义或行为存在倾向但证据链不完整；
+    high_risk: 高风险，语义和行为双证据链完整，或属于明确禁止类目。

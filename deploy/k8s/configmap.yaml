@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: im-guard-api-config
+data:
+  IM_GUARD_CONFIG: configs/default.yaml
+  IM_GUARD_HOST: 0.0.0.0
+  IM_GUARD_PORT: "8000"
+  IM_GUARD_CORS_ORIGINS: https://audit.example.com
+  IM_GUARD_AUDIT_BACKEND: sqlite
+  IM_GUARD_AUDIT_LOG_PATH: outputs/api_audit_events.sqlite
+  IM_GUARD_MAX_REQUEST_BYTES: "262144"
+  IM_GUARD_RATE_LIMIT_PER_MINUTE: "120"

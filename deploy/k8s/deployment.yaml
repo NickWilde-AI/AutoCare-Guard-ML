@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: im-guard-api
+spec:
+  # SQLite/PVC audit storage is a single-node showcase default.
+  # Scale replicas only after switching audit storage to PostgreSQL or a log platform.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: im-guard-api
+  template:
+    metadata:
+      labels:
+        app: im-guard-api
+    spec:
+      containers:
+        - name: api
+          image: ai-im-guard-ml:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: im-guard-api-config
+            - secretRef:
+                name: im-guard-api-secret
+          volumeMounts:
+            - name: audit-output
+              mountPath: /app/outputs
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+      volumes:
+        - name: audit-output
+          persistentVolumeClaim:
+            claimName: im-guard-audit-pvc

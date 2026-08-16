@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ai-im-guard-ml"
+version = "0.1.0"
+description = "面向 IM 私聊风控审核场景的企业级 AI/ML 多证据风险审核框架。"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Chen Peng" }]
+dependencies = []
+
+[project.optional-dependencies]
+train = [
+  "datasets>=2.18",
+  "torch>=2.2",
+  "transformers>=4.42",
+  "trl>=0.9",
+  "peft>=0.11",
+]
+serve = [
+  "fastapi>=0.110",
+  "httpx>=0.27",
+  "uvicorn>=0.27",
+  "pyyaml>=6.0",
+]
+dev = [
+  "pytest>=8",
+  "pyyaml>=6.0",
+]
+
+[project.scripts]
+im-guard = "im_guard_ml.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

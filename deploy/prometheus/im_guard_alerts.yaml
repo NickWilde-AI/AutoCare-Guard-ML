@@ -1,0 +1,38 @@
+groups:
+  - name: im-guard-api
+    rules:
+      - alert: IMGuardHighParseErrorRate
+        expr: im_guard_parse_non_ok_total / clamp_min(im_guard_requests_total, 1) > 0.02
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "IM Guard parse_non_ok rate is critical"
+          description: "模型输出解析异常率超过 2%，应检查 prompt、模型版本和后处理。"
+
+      - alert: IMGuardHighBanRate
+        expr: im_guard_requests_by_handling_total{handling_suggestion="ban_account"} / clamp_min(im_guard_requests_total, 1) > 0.12
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "IM Guard ban_account rate is critical"
+          description: "ban_account 占比超过 12%，应立即转人审并排查上游行为特征和策略变更。"
+
+      - alert: IMGuardP95LatencyHigh
+        expr: im_guard_latency_ms{quantile="p95"} > 1200
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "IM Guard P95 latency is above budget"
+          description: "P95 延迟超过 1200ms，应检查 vLLM queue、输入长度、prefix cache 和限流策略。"
+
+      - alert: IMGuardNoTraffic
+        expr: im_guard_requests_total == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "IM Guard has no observed traffic"
+          description: "15 分钟内没有审核请求，需确认流量路由、服务健康或指标抓取是否异常。"

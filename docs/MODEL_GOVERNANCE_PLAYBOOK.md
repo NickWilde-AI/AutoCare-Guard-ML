@@ -1,0 +1,185 @@
+# 模型治理 Playbook
+
+本文档面向算法工程师和运维人员，描述模型从训练到退役的全生命周期治理流程。
+
+## 1. 模型生命周期
+
+```
+训练完成 → candidate → 离线评测 → 审批 → 灰度 → stable → 退役 retired
+                ↑                                         │
+                └──── 回滚 ←──── 告警触发 ←───────────────┘
+```
+
+### 状态定义
+
+| 状态 | 含义 | 允许操作 |
+| --- | --- | --- |
+| `candidate` | 候选模型，尚未通过审批 | 离线评测、shadow 推理 |
+| `stable` | 当前线上服务模型 | 接收生产流量 |
+| `retired` | 已退役，不再服务 | 仅供审计查询 |
+
+## 2. 版本管理
+
+### 2.1 版本号体系
+
+| 版本类型 | 格式 | 示例 | 变更频率 |
+| --- | --- | --- | --- |
+| model_version | `im-audit-judge-{base}-sft-v{N}` | `im-audit-judge-qwen35-27b-sft-v2` | 每次训练 |
+| prompt_version | `prompt-v{N}.{M}` | `prompt-v2.1` | prompt 修改 |
+| rubric_version | `rubric-v{N}` | `rubric-v3` | 标注规范变更 |
+| feature_schema_version | `schema-v{N}` | `schema-v1` | 输入字段变更 |
+| postprocess_version | `post-v{N}` | `post-v2` | 路由规则变更 |
+
+### 2.2 版本记录
+
+所有版本信息通过 `configs/default.yaml` 中的 `versions` 字段管理，每次审计事件自动记录当时的版本快照。
+
+## 3. 模型审批流程
+
+### 3.1 前置条件
+
+candidate 模型在申请晋升 stable 前必须满足：
+
+| 检查项 | 阈值 | 验证方式 |
+| --- | --- | --- |
+| 整体 F1 | >= 0.78 | 离线 eval set |
+| 误封率 FPR | < 3% | 离线 eval set |
+| handling_macro_f1 | >= 0.70 | 离线 eval set |
+| P95 推理延迟 | < 1200ms | benchmark_api |
+| 回归测试 | 全部通过 | `make enterprise-check` |
+| 灰度验证 | >= 24h 无告警 | 灰度日志 |
+
+### 3.2 审批人
+
+| 角色 | 职责 |
+| --- | --- |
+| 算法负责人 | 确认指标达标、评测报告无异常 |
+| 安全策略 PM | 确认业务风险可接受 |
+| SRE | 确认部署和性能无风险 |
+
+### 3.3 审批记录
+
+审批信息写入 `configs/model_registry.yaml`：
+
+```yaml
+models:
+  im-audit-judge-qwen35-27b-sft-v2:
+    status: stable
+    approved_by: "算法负责人 + 安全策略 PM"
+    approved_at: "2026-06-01"
+    approval_ticket: "MODEL-APPROVE-2026-0601"
+    metrics:
+      f1: 0.835
+      fpr: 0.021
+      handling_macro_f1: 0.732
+      p95_latency_ms: 680
+```
+
+## 4. 灰度发布
+
+### 4.1 灰度策略
+
+| 阶段 | 流量比例 | 持续时间 | 观察指标 |
+| --- | --- | --- | --- |
+| Shadow | 0%（仅记录不决策） | >= 24h | 输出分布、解析成功率 |
+| Canary | 5% | >= 24h | ban_rate、F1、延迟 |
+| 扩量 | 20% | >= 24h | 同上 + 人审反馈 |
+| 全量 | 100% | - | 全量监控 |
+
+### 4.2 灰度守护条件
+
+任一条件触发则自动回滚到上一个 stable 版本：
+
+- ban_rate 相对旧版上升 > 3pp
+- parse_error_rate > 2%
+- P95 延迟 > 1200ms
+- 人工复核否决率 > 20%
+
+### 4.3 灰度配置
+
+```yaml
+# configs/rollout.yaml
+strategy: canary
+canary_percent: 5
+promote_after_hours: 24
+auto_rollback_rules:
+  - metric: ban_rate_delta
+    threshold: 0.03
+  - metric: parse_error_rate
+    threshold: 0.02
+  - metric: p95_latency_ms
+    threshold: 1200
+rollback_target: im-audit-judge-qwen35-27b-sft-v1
+```
+
+## 5. 回滚流程
+
+### 5.1 触发条件
+
+| 触发源 | 条件 | 响应时间 |
+| --- | --- | --- |
+| 自动告警 | 灰度守护条件任一触发 | 即时自动回滚 |
+| 人工决策 | SRE 或算法负责人判断 | 5 分钟内 |
+| 安全事件 | 发现严重漏放或误封 | 15 分钟内 |
+
+### 5.2 回滚步骤
+
+1. 更新 `model_registry.yaml` 中 candidate 状态为 retired
+2. 确认 rollback_target 模型可用
+3. 重启服务加载 stable 版本
+4. 验证 `/ready` 返回正确版本号
+5. 观察 10 分钟确认指标恢复
+6. 创建事故记录（incident runbook）
+
+## 6. 实验记录
+
+### 6.1 实验模板
+
+每次训练实验记录以下信息：
+
+```yaml
+experiment_id: "exp-2026-0607-001"
+base_model: "Qwen/Qwen2.5-7B-Instruct"
+training_data:
+  internal: 800
+  public_xguard: 50000
+  synthetic: 200
+hyperparameters:
+  learning_rate: 2.0e-5
+  epochs: 3
+  lora_rank: 64
+  batch_size: 4
+results:
+  eval_f1: 0.835
+  eval_fpr: 0.021
+  training_loss_final: 0.42
+notes: "增加 LoRA rank 从 32 到 64，F1 提升 1.4pp"
+```
+
+### 6.2 实验对比
+
+使用 `im-guard ab-report` 命令生成两个模型的对比报告，输出包括：
+- 各指标 delta
+- 分类别 F1 对比
+- 典型分歧案例
+
+## 7. 退役流程
+
+模型退役前确认：
+- 已有新 stable 版本替代
+- 审计日志中标记退役时间
+- checkpoint 文件保留 90 天后可删除
+- 退役原因写入 registry
+
+## 8. 治理检查命令
+
+```bash
+# 模型注册表合规校验
+make model-registry-check
+
+# 生产上线前全量自检
+make production-preflight
+
+# 查看当前版本
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/ready
+```
