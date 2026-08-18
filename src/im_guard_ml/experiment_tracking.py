@@ -31,9 +31,9 @@ class ExperimentRecord:
     base_model: str = ""
     max_seq_length: int = 8192
     num_train_epochs: int = 2
-    learning_rate: float = 2e-6
+    learning_rate: float = 1e-4  # 统一口径（2026-08-18 定稿）：LoRA 学习率 1e-4。
     batch_size: int = 4
-    gradient_accumulation_steps: int = 4
+    gradient_accumulation_steps: int = 16
     peft_enabled: bool = False
 
     # Data versions
@@ -86,9 +86,9 @@ class ExperimentTracker:
             base_model=model_cfg.get("base_model", ""),
             max_seq_length=model_cfg.get("max_seq_length", 8192),
             num_train_epochs=train_cfg.get("num_train_epochs", 2),
-            learning_rate=train_cfg.get("learning_rate", 2e-6),
+            learning_rate=train_cfg.get("learning_rate", 1e-4),
             batch_size=train_cfg.get("per_device_train_batch_size", 4),
-            gradient_accumulation_steps=train_cfg.get("gradient_accumulation_steps", 4),
+            gradient_accumulation_steps=train_cfg.get("gradient_accumulation_steps", 16),
             peft_enabled=train_cfg.get("peft", {}).get("enabled", False),
             data_version=data_version,
             train_size=train_size,

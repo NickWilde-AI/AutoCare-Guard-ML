@@ -17,6 +17,7 @@ models/
 *.pth
 *.gguf
 *.egg-info/
+*.zip
 .env
 .claude/
 private/

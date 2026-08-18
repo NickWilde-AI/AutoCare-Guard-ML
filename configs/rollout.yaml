@@ -24,7 +24,9 @@ rollout:
 
 ab_test:
   enabled: false
-  control_model_version: heuristic-demo-v0
+  # 与 configs/model_registry.yaml 的 current_stable 保持一致。
+  control_model_version: heuristic-public-v0
+  # 下一真实模型占位名（与 public 仓库的 heuristic-public-v0 命名风格不同是有意的）。
   candidate_model_version: im-audit-judge-next
   split_percent_candidate: 10
   success_metrics:
@@ -33,6 +35,9 @@ ab_test:
     - ban_account_fpr
     - human_review_overturn_rate
   guardrails:
+    # ban_account_fpr 是"gold 非违规中被误判 ban 的比例"红线（0.03），
+    # 与 default.yaml alert_thresholds 的 ban_account_rate（ban 占全部请求比例
+    # 的告警阈值）分母口径不同，勿混用（P2-45）。
     ban_account_fpr_max: 0.03
     parse_non_ok_rate_max: 0.02
     p95_latency_ms_max: 1200

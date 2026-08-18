@@ -9,7 +9,7 @@ from .privacy import build_input_summary
 
 @dataclass(slots=True)
 class VersionInfo:
-    model_version: str = "heuristic-demo-v0"
+    model_version: str = "heuristic-public-v0"
     prompt_version: str = "prompt-v1"
     rubric_version: str = "rubric-v1"
     feature_schema_version: str = "feature-schema-v1"
@@ -28,7 +28,7 @@ class VersionInfo:
 def version_info_from_config(config: dict[str, Any], model_path: str | None = None) -> VersionInfo:
     versions = config.get("versions", {})
     return VersionInfo(
-        model_version=versions.get("model_version") or (model_path or "heuristic-demo-v0"),
+        model_version=versions.get("model_version") or (model_path or "heuristic-public-v0"),
         prompt_version=versions.get("prompt_version", "prompt-v1"),
         rubric_version=versions.get("rubric_version", "rubric-v1"),
         feature_schema_version=versions.get("feature_schema_version", "feature-schema-v1"),

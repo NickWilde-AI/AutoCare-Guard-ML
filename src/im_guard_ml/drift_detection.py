@@ -76,7 +76,8 @@ def chi_square_test(
         obs = observed.get(key, 0)
         exp = expected.get(key, 0) * scale
         if exp < 1e-10:
-            exp = 0.5  # Continuity correction for zero-expected cells
+            # 零期望单元的演示级近似修正（非标准 Yates/小频合并，P2-51）
+            exp = 0.5
         chi2 += (obs - exp) ** 2 / exp
 
     # Approximate p-value using chi-square CDF (Wilson-Hilferty approximation)
@@ -137,20 +138,19 @@ def ks_test(
     n_a = len(sample_a)
     n_b = len(sample_b)
 
-    # Combine and sort
-    combined = [(v, "a") for v in sample_a] + [(v, "b") for v in sample_b]
-    combined.sort(key=lambda x: x[0])
+    # 两样本 KS 必须在每个唯一取值上比较两个经验 CDF（P1-04）：
+    # 按样本逐个累加会在并列值组内产生虚假差（相同分布会被判为 D=1.0）。
+    counts_a = Counter(sample_a)
+    counts_b = Counter(sample_b)
+    values = sorted(set(counts_a) | set(counts_b))
 
-    # Compute empirical CDFs and find max difference
     cdf_a = 0.0
     cdf_b = 0.0
     d_max = 0.0
 
-    for value, source in combined:
-        if source == "a":
-            cdf_a += 1.0 / n_a
-        else:
-            cdf_b += 1.0 / n_b
+    for value in values:
+        cdf_a += counts_a.get(value, 0) / n_a
+        cdf_b += counts_b.get(value, 0) / n_b
         d_max = max(d_max, abs(cdf_a - cdf_b))
 
     # Approximate p-value (Kolmogorov distribution)
@@ -233,11 +233,11 @@ def detect_drift(
         base_dist = baseline_report.get("prediction_distribution", {}).get(field_name, {})
 
         if cur_dist and base_dist:
-            # Convert proportions to counts (approximate)
+            # Convert proportions to counts (approximate, round to avoid truncation bias P2-52)
             cur_total = current_report.get("total", 1000)
             base_total = baseline_report.get("total", 1000)
-            cur_counts = {k: int(v * cur_total) for k, v in cur_dist.items()}
-            base_counts = {k: int(v * base_total) for k, v in base_dist.items()}
+            cur_counts = {k: int(round(v * cur_total)) for k, v in cur_dist.items()}
+            base_counts = {k: int(round(v * base_total)) for k, v in base_dist.items()}
 
             chi2, p_val = chi_square_test(cur_counts, base_counts)
             is_sig = p_val < chi2_alpha
@@ -312,7 +312,8 @@ def detect_drift(
 def _reconstruct_samples(stats: dict[str, Any]) -> list[float]:
     """Reconstruct approximate sample distribution from summary statistics.
 
-    Uses min, p50, p95, max to create a rough distribution for KS testing.
+    演示级重建（P2-53）：仅用 min/p50/p95/max 在百分位区间内线性撒点，
+    端点包含（t 可达 1.0），用于 KS 检验的粗略参考，不作为精确统计。
     """
     if not stats or stats.get("count", 0) == 0:
         return []
@@ -326,7 +327,6 @@ def _reconstruct_samples(stats: dict[str, Any]) -> list[float]:
     p50 = float(stats.get("p50", 0))
     p95 = float(stats.get("p95", 0))
     max_val = float(stats.get("max", 0))
-    mean = float(stats.get("mean", 0))
 
     # Generate approximate samples matching the summary stats
     samples: list[float] = []
@@ -337,16 +337,16 @@ def _reconstruct_samples(stats: dict[str, Any]) -> list[float]:
     n_50_to_95 = int(n * 0.45)
     n_above_95 = n - n_below_50 - n_50_to_95
 
+    def _t(i: int, group_n: int) -> float:
+        return i / (group_n - 1) if group_n > 1 else 1.0
+
     for i in range(n_below_50):
-        t = i / max(n_below_50, 1)
-        samples.append(min_val + t * (p50 - min_val))
+        samples.append(min_val + _t(i, n_below_50) * (p50 - min_val))
 
     for i in range(n_50_to_95):
-        t = i / max(n_50_to_95, 1)
-        samples.append(p50 + t * (p95 - p50))
+        samples.append(p50 + _t(i, n_50_to_95) * (p95 - p50))
 
     for i in range(n_above_95):
-        t = i / max(n_above_95, 1)
-        samples.append(p95 + t * (max_val - p95))
+        samples.append(p95 + _t(i, n_above_95) * (max_val - p95))
 
     return samples

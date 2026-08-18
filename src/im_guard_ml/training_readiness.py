@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,8 @@ from .dataio import load_yaml
 
 
 REQUIRED_TRAIN_MODULES = ["datasets", "torch", "transformers", "trl", "peft"]
+
+_MODEL_SIZE_RE = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)\s*B", re.IGNORECASE)
 
 
 def build_training_readiness_report(
@@ -73,11 +76,16 @@ def build_training_readiness_report(
     )
 
     model_name = str(cfg.get("model", {}).get("base_model", ""))
+    large_dense = _model_size_gb(model_name)
     add(
         "model_config",
-        "warn" if "27B" in model_name.upper() and hardware["device"] in {"cpu", "none"} else "pass",
-        detail="Qwen 27B SFT needs GPU-class training hardware; use LoRA/QLoRA on a GPU box or switch to a small smoke-test model."
-        if "27B" in model_name.upper() and hardware["device"] in {"cpu", "none"}
+        "warn" if large_dense is not None and large_dense >= 30 and hardware["device"] in {"cpu", "none"} else "pass",
+        detail=(
+            f"{large_dense:g}B 级稠密模型 LoRA SFT 需要 GPU 级训练环境；"
+            "统一口径（2026-08-18 定稿）为 Qwen3-32B LoRA 多任务 SFT，"
+            "请在多卡 GPU 环境训练，或切换 configs/local_* 下的本地冒烟配置。"
+        )
+        if large_dense is not None and large_dense >= 30 and hardware["device"] in {"cpu", "none"}
         else "",
         base_model=model_name,
         max_seq_length=cfg.get("model", {}).get("max_seq_length"),
@@ -114,6 +122,16 @@ def build_training_readiness_report(
 
 def _module_status(names: list[str]) -> dict[str, bool]:
     return {name: importlib.util.find_spec(name) is not None for name in names}
+
+
+def _model_size_gb(model_name: str) -> float | None:
+    """Extract the model size (in billions of parameters) from a model name.
+
+    P2-38：支持小数尺寸（如 "Qwen2.5-0.5B" → 0.5，而不是误解析为 5）。
+    Returns None when the size cannot be determined (e.g. tiny smoke models).
+    """
+    match = _MODEL_SIZE_RE.search(model_name)
+    return float(match.group(1)) if match else None
 
 
 def _hardware_status(torch_available: bool) -> dict[str, str]:

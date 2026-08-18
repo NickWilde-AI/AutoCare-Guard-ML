@@ -18,7 +18,7 @@ from .audit_store import create_audit_store
 from .auth import parse_auth_config
 from .dataio import load_yaml
 from .inference import HeuristicJudge, TransformersJudge
-from .postprocess import route_policy
+from .postprocess import postprocess_prediction
 from .privacy import build_input_summary
 from .versioning import version_info_from_config
 
@@ -49,6 +49,10 @@ def _compute_counters(events: list[dict]) -> dict:
 
 def create_app(config_path: str = "configs/default.yaml", model_path: str | None = None, *, api: bool = False, api_model: str = "qwen-plus"):
     cfg = load_yaml(config_path)
+    # P1-07：合并 configs/rubrics.yaml 的逐主题 rubric，11 类主题不再回退 __default__。
+    from .config import merge_rubrics_file
+
+    cfg = merge_rubrics_file(cfg)
     rubrics = cfg.get("rubrics", {})
     if api:
         from .inference import APIJudge
@@ -58,7 +62,7 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
     else:
         judge = HeuristicJudge(rubrics)
     versions = version_info_from_config(cfg, model_path)
-    mode = "api" if api else ("checkpoint" if model_path else "heuristic-demo")
+    mode = "api" if api else ("checkpoint" if model_path else "heuristic")
     app = FastAPI(title="AI IM Guard ML", version="0.1.0")
     auth_config = parse_auth_config(
         os.environ.get("IM_GUARD_API_TOKEN", ""),
@@ -70,7 +74,8 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
     audit_store = create_audit_store(audit_backend, audit_log_path)
     cors_origins = _parse_cors_origins(os.environ.get("IM_GUARD_CORS_ORIGINS", "*"))
     max_request_bytes = _parse_int_env("IM_GUARD_MAX_REQUEST_BYTES", 262_144)
-    rate_limit_per_minute = _parse_int_env("IM_GUARD_RATE_LIMIT_PER_MINUTE", 600)
+    # 默认 120 与 deploy/env 示例及 docs 一致（P2-07）。
+    rate_limit_per_minute = _parse_int_env("IM_GUARD_RATE_LIMIT_PER_MINUTE", 120)
 
     app.add_middleware(
         CORSMiddleware,
@@ -113,6 +118,9 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
     @app.middleware("http")
     async def production_guards(request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or str(uuid4())
+        # P2-14：request_id 由中间件统一生成并写入 request.state，
+        # 保证响应头与响应体/审计事件中的 request_id 完全一致。
+        request.state.request_id = request_id
         content_length = request.headers.get("Content-Length")
         if content_length and int(content_length) > max_request_bytes:
             return _error_response(413, "request_too_large", "request body exceeds IM_GUARD_MAX_REQUEST_BYTES", request_id)
@@ -121,12 +129,16 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
         if rate_limit_per_minute > 0 and not any(request.url.path.startswith(p) for p in _no_ratelimit):
             client = request.client.host if request.client else "unknown"
             now = time.time()
-            bucket = request_times.setdefault(client, deque())
-            while bucket and now - bucket[0] > 60:
-                bucket.popleft()
-            if len(bucket) >= rate_limit_per_minute:
+            bucket = request_times.get(client)
+            if bucket is not None:
+                while bucket and now - bucket[0] > 60:
+                    bucket.popleft()
+                if not bucket:
+                    # P1-03：窗口内时间戳全部过期即删除键，防止伪造大量源 IP 导致内存膨胀。
+                    del request_times[client]
+            if client in request_times and len(request_times[client]) >= rate_limit_per_minute:
                 return _error_response(429, "rate_limited", "too many requests in the current minute", request_id)
-            bucket.append(now)
+            request_times.setdefault(client, deque()).append(now)
         response = await call_next(request)
         response.headers.setdefault("X-Request-ID", request_id)
         return response
@@ -177,18 +189,24 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
     @app.post("/judge")
     def judge_case(case: dict, request: Request) -> dict:
         require_permission(request, "write")
-        request_id = request.headers.get("X-Request-ID") or str(uuid4())
+        # P2-14：统一使用中间件生成的 request_id。
+        request_id = getattr(request.state, "request_id", None) or str(uuid4())
         t0 = time.time()
         pred = judge.predict(case)
-        route, final_action = route_policy(pred, case)
+        # P1-01：服务层统一走 postprocess，保证 ban 三重保护与 parse_status 可观测。
+        result = postprocess_prediction(pred, case)
+        parsed_output = result.parsed_output
+        route, final_action = result.route, result.final_action
         actual_ms = (time.time() - t0) * 1000
+        # 演示模式（P2-23）：本地规则/轻量 judge 的实际耗时远低于真实推理，
+        # 合成 180-520ms 用于看板展示；真实 checkpoint/API 模式使用实际耗时。
         simulated_latency = random.uniform(180, 520) if actual_ms < 50 else actual_ms
         latency_ms = round(simulated_latency, 1)
 
-        handling = pred.get("handling_suggestion", "ignore")
-        topic = pred.get("topic", "无主题")
-        risk_level = pred.get("risk_level", "low_risk")
-        parse_non_ok = pred.get("parse_status") not in (None, "ok")
+        handling = parsed_output.get("handling_suggestion", "ignore")
+        topic = parsed_output.get("topic", "无主题")
+        risk_level = parsed_output.get("risk_level", "low_risk")
+        parse_non_ok = result.parse_status != "ok"
 
         event = {
             "ts": time.time(),
@@ -224,17 +242,27 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
             **versions.to_dict(),
             "risk_level": risk_level,
             "topic": topic,
-            "final_judgment": pred.get("final_judgment", "not_exist_violation"),
+            "final_judgment": parsed_output.get("final_judgment", "not_exist_violation"),
             "handling_suggestion": handling,
             "route": route,
             "final_action": final_action,
             "latency_ms": latency_ms,
             "parse_non_ok": parse_non_ok,
+            "parse_status": result.parse_status,
+            "validation_errors": result.validation_errors,
             "input_summary": build_input_summary(case),
         }
         append_audit_event(audit_event)
 
-        return {**versions.to_dict(), **pred, "route": route, "final_action": final_action, "request_id": request_id}
+        return {
+            **versions.to_dict(),
+            **parsed_output,
+            "route": route,
+            "final_action": final_action,
+            "parse_status": result.parse_status,
+            "validation_errors": result.validation_errors,
+            "request_id": request_id,
+        }
 
     @app.get("/audit/tickets/{ticket_id}")
     def audit_by_ticket(ticket_id: str, request: Request) -> dict:
@@ -261,12 +289,14 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
         latency_stats = {}
         if latency_history:
             sorted_lat = sorted(latency_history)
-            n = len(sorted_lat)
+            # P2-50：延迟分位与 rollout/monitoring 共用 evaluation.percentile 插值口径。
+            from .evaluation import percentile
+
             latency_stats = {
-                "p50": sorted_lat[int(n * 0.5)],
-                "p95": sorted_lat[min(int(n * 0.95), n - 1)],
-                "p99": sorted_lat[min(int(n * 0.99), n - 1)],
-                "avg": round(sum(sorted_lat) / n, 1),
+                "p50": percentile(sorted_lat, 0.5),
+                "p95": percentile(sorted_lat, 0.95),
+                "p99": percentile(sorted_lat, 0.99),
+                "avg": round(sum(sorted_lat) / len(sorted_lat), 1),
             }
 
         # 主题下钻：每个主题的 risk_level 分布 + handling 分布
@@ -303,13 +333,16 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
             "latency": latency_stats,
             "recent": list(recent_results)[:20],
             "uptime_seconds": uptime_seconds,
-            "model_mode": "checkpoint" if model_path else "heuristic",
+            # P2-46：model_mode 复用 create_app 顶部计算好的单一来源 mode。
+            "model_mode": mode,
         }
 
     @app.get("/metrics", response_class=Response)
     def metrics():
+        # P1-02：请求/处置计数改用 global_counters（counter 语义单调递增，
+        # 不受 event_log maxlen=7200 封顶）；标签维度仍基于滚动窗口并注释说明。
+        c = dict(global_counters)
         all_events = list(event_log)
-        c = _compute_counters(all_events)
         risk_counts = Counter(str(e.get("risk_level", "unknown")) for e in all_events)
         topic_counts = Counter(str(e.get("topic", "unknown")) for e in all_events)
         handling_counts = Counter(str(e.get("handling_suggestion", "unknown")) for e in all_events)
@@ -372,7 +405,7 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
             "risk_levels": labels.get("risk_levels", []),
             "judgments": labels.get("judgments", []),
             "handling_suggestions": labels.get("handling_suggestions", []),
-            "alert_thresholds": cfg.get("alert_thresholds", ),
+            "alert_thresholds": cfg.get("alert_thresholds", {}),
             "rubrics": {k: v for k, v in cfg.get("rubrics", {}).items()},
             "model": cfg.get("model", {}),
             **versions.to_dict(),
@@ -412,11 +445,13 @@ def _label(value: str) -> str:
 def _latency_stats(values: list[float]) -> dict[str, float]:
     if not values:
         return {"avg": 0.0, "p50": 0.0, "p95": 0.0, "p99": 0.0}
+    # P2-50：分位统一使用 evaluation.percentile 插值口径。
+    from .evaluation import percentile
+
     ordered = sorted(values)
-    n = len(ordered)
     return {
-        "avg": round(sum(ordered) / n, 3),
-        "p50": round(ordered[int(n * 0.5)], 3),
-        "p95": round(ordered[min(int(n * 0.95), n - 1)], 3),
-        "p99": round(ordered[min(int(n * 0.99), n - 1)], 3),
+        "avg": round(sum(ordered) / len(ordered), 3),
+        "p50": round(percentile(ordered, 0.5), 3),
+        "p95": round(percentile(ordered, 0.95), 3),
+        "p99": round(percentile(ordered, 0.99), 3),
     }

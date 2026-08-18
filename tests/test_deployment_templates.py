@@ -56,3 +56,31 @@ def test_compose_vllm_service_is_separate_gpu_profile_target():
     assert vllm["ports"] == ["8001:8001"]
     devices = vllm["deploy"]["resources"]["reservations"]["devices"]
     assert devices == [{"capabilities": ["gpu"]}]
+
+
+def test_configmap_covers_redline_envs_and_prod_env_keys():
+    # P2-39：k8s configmap 必须包含 prod.env.example 中除密钥外的全部键，
+    # 特别是 2026-08-19 补的两个红线变量，防止"改了不生效"回流。
+    configmap = _load_yaml("deploy/k8s/configmap.yaml")["data"]
+    prod_env = (ROOT / "deploy" / "audit_service.prod.env.example").read_text(encoding="utf-8")
+    prod_keys = {
+        line.split("=", 1)[0].strip()
+        for line in prod_env.splitlines()
+        if "=" in line and not line.strip().startswith("#")
+    }
+    # 密钥类走 secret 文件；权重路径由 volume/镜像管理，均不在 configmap 中要求。
+    excluded_keys = {
+        "IM_GUARD_API_TOKEN", "IM_GUARD_API_TOKENS", "IM_GUARD_API_TOKEN_HASHES",
+        "IM_GUARD_MODEL_PATH",
+    }
+    assert set(configmap) == prod_keys - excluded_keys
+    assert configmap["IM_GUARD_P95_LATENCY_BUDGET_MS"] == "1200"
+    assert configmap["IM_GUARD_BAN_FPR_REDLINE"] == "0.03"
+
+
+def test_dockerfile_respects_env_overrides():
+    # P2-09：Dockerfile CMD 必须消费 IM_GUARD_CONFIG/HOST/PORT 环境变量。
+    dockerfile = (ROOT / "deploy" / "Dockerfile").read_text(encoding="utf-8")
+    assert "IM_GUARD_CONFIG" in dockerfile
+    assert "IM_GUARD_HOST" in dockerfile
+    assert "IM_GUARD_PORT" in dockerfile

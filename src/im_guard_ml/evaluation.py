@@ -68,25 +68,59 @@ def eval_multi_field(targets: list[dict[str, Any]], preds: list[dict[str, Any]],
 
 
 def auprc(targets: Sequence[int], probs: Sequence[float]) -> float:
-    pairs = sorted(zip(probs, targets), reverse=True)
-    positives = sum(targets)
+    """Average precision (AUPRC) with tie-grouped scores.
+
+    相同分数的样本按整组处理（组内同时更新 tp/fp），并列排序顺序不会影响结果：
+    全并列的随机预测返回 0.5（旧实现把正样本排在并列组前面，会错误地返回 1.0）。
+    口径为不插值的 average precision（AP），与 sklearn `average_precision_score` 语义一致。
+    """
+    if not targets:
+        return 0.0
+    positives = sum(1 for t in targets if t == 1)
     if positives == 0:
         return 0.0
+    order = sorted(range(len(targets)), key=lambda i: float(probs[i]), reverse=True)
+    ap = 0.0
     tp = 0
     fp = 0
-    points: list[tuple[float, float]] = [(1.0, 0.0)]
-    for _score, target in pairs:
-        if target == 1:
-            tp += 1
-        else:
-            fp += 1
-        precision = tp / (tp + fp)
-        recall = tp / positives
-        points.append((precision, recall))
-    area = 0.0
-    for (p0, r0), (p1, r1) in zip(points, points[1:]):
-        area += (r1 - r0) * ((p0 + p1) / 2)
-    return area
+    i = 0
+    n = len(order)
+    while i < n:
+        j = i + 1
+        score = float(probs[order[i]])
+        while j < n and float(probs[order[j]]) == score:
+            j += 1
+        group_tp = 0
+        group_fp = 0
+        for k in range(i, j):
+            if targets[order[k]] == 1:
+                group_tp += 1
+            else:
+                group_fp += 1
+        recall_delta = group_tp / positives
+        precision = (tp + group_tp) / (tp + group_tp + fp + group_fp)
+        ap += precision * recall_delta
+        tp += group_tp
+        fp += group_fp
+        i = j
+    return ap
+
+
+def percentile(sorted_values: Sequence[float], p: float) -> float:
+    """Linear-interpolation percentile on ascending-sorted values.
+
+    全仓库统一的 P 分位口径：位置 (len-1)*p 线性插值，由 rollout/monitoring
+    共用，避免"向下取整索引"与"quantiles 插值"两套算法并存（P2-50）。
+    """
+    if not sorted_values:
+        return 0.0
+    if len(sorted_values) == 1:
+        return float(sorted_values[0])
+    pos = (len(sorted_values) - 1) * p
+    lo = int(pos)
+    hi = min(lo + 1, len(sorted_values) - 1)
+    frac = pos - lo
+    return float(sorted_values[lo]) * (1.0 - frac) + float(sorted_values[hi]) * frac
 
 
 def fleiss_kappa(matrix: Sequence[Sequence[int | float]]) -> float:
@@ -96,6 +130,13 @@ def fleiss_kappa(matrix: Sequence[Sequence[int | float]]) -> float:
     n = sum(rows[0])
     if n <= 1:
         return 0.0
+    # Fleiss Kappa 要求每个样本被相同数量的评估者评分；ragged 矩阵会算错，显式拒绝（P2-49）。
+    for row in rows:
+        if abs(sum(row) - n) > 1e-9:
+            raise ValueError(
+                "fleiss_kappa requires every item to be rated by the same number "
+                "of raters (ragged matrices are unsupported)"
+            )
     p_i = [(sum(x * x for x in row) - n) / (n * (n - 1)) for row in rows]
     p_bar = sum(p_i) / len(p_i)
     col_count = len(rows[0])
@@ -105,6 +146,12 @@ def fleiss_kappa(matrix: Sequence[Sequence[int | float]]) -> float:
 
 
 def ordinal_krippendorff_alpha(annotations: Sequence[Sequence[float | None]]) -> float:
+    """Krippendorff alpha with the interval (squared-difference) distance.
+
+    口径声明（P2-48）：本实现为 interval 度量变体（d^2 距离 + 简化 D_e≈2*方差），
+    用于有序风险标签的一致性评估，与标准 coincidence 矩阵实现存在可忽略的
+    数值差异；文档中的 0.71 由数据与审核团队按标准口径产出，本函数仅作工程侧近似参考。
+    """
     rows = [list(row) for row in annotations]
     if not rows or not rows[0]:
         return 0.0

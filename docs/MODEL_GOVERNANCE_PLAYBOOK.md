@@ -24,7 +24,9 @@
 
 | 版本类型 | 格式 | 示例 | 变更频率 |
 | --- | --- | --- | --- |
-| model_version | `im-audit-judge-{base}-sft-v{N}` | `im-audit-judge-qwen35-27b-sft-v2` | 每次训练 |
+| model_version | `im-audit-judge-{base}-lora-v{N}` | `im-audit-judge-qwen3-32b-lora-v2` | 每次训练 |
+
+> 说明：`im-audit-judge-qwen3-32b-lora-v*` 为**未来真实模型**的命名模板（对应 rollout.yaml 的 candidate 占位）；当前公开仓库的稳定版本名为 `heuristic-public-v0`（见 configs/model_registry.yaml）。
 | prompt_version | `prompt-v{N}.{M}` | `prompt-v2.1` | prompt 修改 |
 | rubric_version | `rubric-v{N}` | `rubric-v3` | 标注规范变更 |
 | feature_schema_version | `schema-v{N}` | `schema-v1` | 输入字段变更 |
@@ -63,15 +65,16 @@ candidate 模型在申请晋升 stable 前必须满足：
 
 ```yaml
 models:
-  im-audit-judge-qwen35-27b-sft-v2:
+  im-audit-judge-qwen3-32b-lora-v2:
     status: stable
     approved_by: "算法负责人 + 安全策略 PM"
     approved_at: "2026-06-01"
     approval_ticket: "MODEL-APPROVE-2026-0601"
     metrics:
-      f1: 0.835
-      fpr: 0.021
+      final_judgment_acc: 0.821
+      risk_macro_f1: 0.756
       handling_macro_f1: 0.732
+      ban_account_fpr: 0.026
       p95_latency_ms: 680
 ```
 
@@ -109,7 +112,7 @@ auto_rollback_rules:
     threshold: 0.02
   - metric: p95_latency_ms
     threshold: 1200
-rollback_target: im-audit-judge-qwen35-27b-sft-v1
+rollback_target: im-audit-judge-qwen3-32b-lora-v1
 ```
 
 ## 5. 回滚流程
@@ -139,21 +142,29 @@ rollback_target: im-audit-judge-qwen35-27b-sft-v1
 
 ```yaml
 experiment_id: "exp-2026-0607-001"
-base_model: "Qwen/Qwen2.5-7B-Instruct"
+base_model: "Qwen/Qwen3-32B"
 training_data:
-  internal: 800
-  public_xguard: 50000
-  synthetic: 200
+  history_tickets: 24498
+  synthetic: 11615
+  refinement_hard: 2629
+  public_binary: 12700
 hyperparameters:
-  learning_rate: 2.0e-5
-  epochs: 3
-  lora_rank: 64
-  batch_size: 4
+  # 统一口径（2026-08-18 定稿）：LoRA 多任务 SFT，lr 1e-4，2 Epoch，全局 Batch 64。
+  learning_rate: 0.0001
+  epochs: 2
+  lora_rank: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+  batch_size: 64
+  max_seq_length: 8192
 results:
-  eval_f1: 0.835
-  eval_fpr: 0.021
+  final_judgment_acc: 0.821
+  risk_macro_f1: 0.756
+  handling_macro_f1: 0.732
+  ban_account_fpr: 0.026
   training_loss_final: 0.42
-notes: "增加 LoRA rank 从 32 到 64，F1 提升 1.4pp"
+notes: "LoRA r=16 在当前验证集上为效果与训练成本之间的折中选择。"
 ```
 
 ### 6.2 实验对比

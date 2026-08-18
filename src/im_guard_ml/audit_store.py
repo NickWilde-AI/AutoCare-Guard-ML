@@ -28,7 +28,11 @@ class JsonlAuditStore:
             for line in fh:
                 if not line.strip():
                     continue
-                event = json.loads(line)
+                # P2-15：脏行跳过而非整次查询失败（审计文件可能被截断/写入中断）。
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
                 if str(event.get("ticket_id", "")) == ticket_id:
                     matches.append(event)
         return matches[-limit:]

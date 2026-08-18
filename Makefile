@@ -42,7 +42,7 @@ drift-report: predict-route
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) drift-report $(OUT_DIR)/demo_routed_predictions.jsonl --baseline-pred-jsonl $(OUT_DIR)/demo_routed_predictions.jsonl --out $(OUT_DIR)/drift_report.json
 
 ab-report: predict-route
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) ab-report --control $(OUT_DIR)/demo_routed_predictions.jsonl --candidate $(OUT_DIR)/demo_routed_predictions.jsonl --out $(OUT_DIR)/ab_report.md --json-out $(OUT_DIR)/ab_report.json
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config configs/rollout.yaml ab-report --control $(OUT_DIR)/demo_routed_predictions.jsonl --candidate $(OUT_DIR)/demo_routed_predictions.jsonl --out $(OUT_DIR)/ab_report.md --json-out $(OUT_DIR)/ab_report.json
 
 api-contract:
 	mkdir -p $(OUT_DIR)
@@ -121,10 +121,10 @@ demo:
 	@PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.simulator --port $(PORT) --interval $(SIM_INTERVAL) &
 	@sleep 1
 	@echo "打开监控大盘..."
-	@open static/dashboard.html
+	@open static/Guard-ML.html
 	@echo ""
 	@echo "=== 演示已启动 ==="
-	@echo "  监控大盘: static/dashboard.html"
+	@echo "  监控大盘: static/Guard-ML.html"
 	@echo "  审核接口: http://127.0.0.1:$(PORT)/judge"
 	@echo "  健康检查: http://127.0.0.1:$(PORT)/health"
 	@echo "  指标接口: http://127.0.0.1:$(PORT)/metrics"

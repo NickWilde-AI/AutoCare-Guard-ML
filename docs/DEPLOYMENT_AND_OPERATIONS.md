@@ -193,11 +193,8 @@ kubectl rollout restart deployment/im-guard-api
 - `IM_GUARD_AUDIT_LOG_PATH`：API 审计落盘路径，默认 `outputs/api_audit_events.jsonl`；SQLite 示例为 `outputs/api_audit_events.sqlite`。
 - `IM_GUARD_MAX_REQUEST_BYTES`：单次请求体大小上限，默认 `262144`。
 - `IM_GUARD_RATE_LIMIT_PER_MINUTE`：按客户端 IP 的每分钟基础限流，默认 `120`；设为 `0` 可关闭。
-- `IM_GUARD_ENABLE_ROUTE`：是否输出策略路由。
-- `IM_GUARD_ENABLE_VERSION`：是否输出版本字段。
-- `IM_GUARD_BAN_REQUIRES_HUMAN_REVIEW`：ban 是否强制人审。
-- `IM_GUARD_P95_LATENCY_BUDGET_MS`：延迟红线。
-- `IM_GUARD_BAN_FPR_REDLINE`：ban 误杀红线。
+- `IM_GUARD_P95_LATENCY_BUDGET_MS`：延迟红线，运行时覆盖 rollout guardrail `p95_latency_ms_max`（src/im_guard_ml/rollout.py）。
+- `IM_GUARD_BAN_FPR_REDLINE`：ban 误杀红线，运行时覆盖 rollout guardrail `ban_account_fpr_max`（src/im_guard_ml/rollout.py）。
 
 ## 8. 灰度配置
 

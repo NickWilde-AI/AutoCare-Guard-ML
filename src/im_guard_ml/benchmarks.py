@@ -8,6 +8,10 @@ IM-specific training does not degrade general text moderation capability:
   3. XSTest (~0.45K): Safe-looking-but-actually-safe, monitors false positive rate
 
 These public benchmarks complement user-provided IM-specific evaluation data.
+
+口径声明（P2-55）：Judge 输出不含 violation 概率，AUPRC 使用 risk_level
+（high=0.9 / mid=0.6 / low=0.1）作为概率代理计算——仅用于趋势监控，
+不是真实模型概率，报告中应注明"代理 AUPRC"。
 """
 
 from __future__ import annotations

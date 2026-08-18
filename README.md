@@ -154,7 +154,7 @@ Judge 输出的是结构化审核结论，而不是单个二分类标签：
   "final_judgment": "exist_violation | not_exist_violation",
   "judgment_basis": "decision basis with evidence references",
   "handling_suggestion": "ignore | warning | limit_account | ban_account",
-  "route": "auto_close | auto_action | policy_action | human_review_required",
+  "route": "auto_close | auto_action | policy_action | human_review_required | fallback_or_review",
   "final_action": "ignore | send_warning | limit_account_candidate | review_before_ban"
 }
 ```
@@ -216,9 +216,9 @@ PYTHONPATH=src im-guard --config configs/default.yaml \
 
 | 步骤 | 目标 |
 | --- | --- |
-| 准备 GPU | 小模型 LoRA 建议至少 24GB 显存，7B 实验更建议 48GB/80GB |
+| 准备 GPU | 统一口径（2026-08-18 定稿）：Qwen3-32B LoRA 多任务 SFT，建议多卡 80GB 级 GPU；本地冒烟可用 tiny-gpt2 / Qwen2.5-0.5B |
 | 固定验证集 | 保留稳定 `val/test`，避免指标被训练集污染 |
-| 训练 Qwen checkpoint | 使用 `Qwen/Qwen2.5-7B-Instruct` 或更小的 Qwen LoRA baseline |
+| 训练 Qwen checkpoint | 使用 `Qwen/Qwen3-32B` 做 LoRA 多任务 SFT（r=16 / alpha=32 / q,k,v,o_proj / lr=1e-4 / 2 Epoch / 全局 Batch 64） |
 | 严格评测 | 报告 `final_judgment F1`、`risk_level macro-F1`、`handling macro-F1`、`ban_account FPR` |
 | 误判分析 | 重点看误封、漏召、强处置误判和 `mid_risk` 灰区 |
 | 回灌 hard cases | 把错误样本整理成 refinement 数据，再进入下一轮训练 |

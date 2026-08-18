@@ -109,11 +109,15 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     cfg = load_yaml(args.config)
+    # P1-07：合并 configs/rubrics.yaml 的逐主题 rubric，11 类主题不再回退 __default__。
+    from .config import merge_rubrics_file
+
+    cfg = merge_rubrics_file(cfg)
     if args.cmd == "summary":
         print(json.dumps(stratified_summary(read_jsonl(args.jsonl)), ensure_ascii=False, indent=2))
         return 0
     if args.cmd == "predict":
-        from .postprocess import route_policy
+        from .postprocess import postprocess_prediction
         from .versioning import build_audit_log, version_info_from_config
 
         rows = read_jsonl(args.jsonl)
@@ -130,8 +134,14 @@ def main(argv: list[str] | None = None) -> int:
         for row in rows:
             pred = judge.predict(row)
             if args.with_route:
-                route, final_action = route_policy(pred, row)
-                pred = {**pred, "route": route, "final_action": final_action}
+                # P1-01：CLI 与 /judge 同走 postprocess，ban 三重保护与 parse_status 一致生效。
+                result = postprocess_prediction(pred, row)
+                pred = {
+                    **result.parsed_output,
+                    "route": result.route,
+                    "final_action": result.final_action,
+                    "parse_status": result.parse_status,
+                }
             if args.with_version:
                 pred = {**versions.to_dict(), **pred}
             preds.append({**row, "prediction": pred})

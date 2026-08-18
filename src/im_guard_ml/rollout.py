@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
-from statistics import quantiles
 from typing import Any
 
-from .evaluation import eval_binary, eval_multi_field
+from .evaluation import eval_binary, eval_multi_field, percentile
 
 
 DEFAULT_SUCCESS_METRICS = ["final_judgment_f1", "handling_macro_f1", "ban_account_fpr"]
@@ -13,6 +13,27 @@ DEFAULT_GUARDRAILS = {
     "parse_non_ok_rate_max": 0.02,
     "p95_latency_ms_max": 1200.0,
 }
+
+# 部署模板中红线的运行时覆盖（P1-08）：与 deploy/env 示例中的同名变量一一对应。
+_ENV_GUARDRAIL_OVERRIDES = {
+    "IM_GUARD_BAN_FPR_REDLINE": "ban_account_fpr_max",
+    "IM_GUARD_P95_LATENCY_BUDGET_MS": "p95_latency_ms_max",
+}
+
+
+def _env_guardrail_overrides() -> dict[str, float]:
+    overrides: dict[str, float] = {}
+    for env_name, guardrail_name in _ENV_GUARDRAIL_OVERRIDES.items():
+        raw = os.environ.get(env_name, "").strip()
+        if not raw:
+            continue
+        try:
+            value = float(raw)
+        except ValueError:
+            continue
+        if value > 0:
+            overrides[guardrail_name] = value
+    return overrides
 
 
 def build_ab_report(
@@ -26,6 +47,9 @@ def build_ab_report(
     ab_cfg = rollout_cfg.get("ab_test", rollout_cfg)
     success_metrics = list(ab_cfg.get("success_metrics") or DEFAULT_SUCCESS_METRICS)
     guardrails = {**DEFAULT_GUARDRAILS, **(ab_cfg.get("guardrails") or {})}
+    # P1-08：接线 IM_GUARD_BAN_FPR_REDLINE / IM_GUARD_P95_LATENCY_BUDGET_MS
+    # 环境变量，作为部署模板中红线配置的运行时覆盖（与 rollout.yaml 同级覆盖）。
+    guardrails.update(_env_guardrail_overrides())
 
     control_by_id = _index_by_ticket(control_rows)
     candidate_by_id = _index_by_ticket(candidate_rows)
@@ -167,10 +191,8 @@ def _p95_latency_ms(rows: list[dict[str, Any]]) -> float:
             continue
     if not values:
         return 0.0
-    values = sorted(values)
-    if len(values) < 2:
-        return values[0]
-    return float(quantiles(values, n=100, method="inclusive")[94])
+    # P95 与 monitoring 共用 evaluation.percentile 的线性插值口径（P2-50）。
+    return float(percentile(sorted(values), 0.95))
 
 
 def _human_review_overturn_rate(rows: list[dict[str, Any]]) -> float | None:

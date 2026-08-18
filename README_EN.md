@@ -215,9 +215,9 @@ The engineering loop is now working. The next step is model quality, not more fe
 
 | Step | Goal |
 | --- | --- |
-| Rent GPU capacity | Use at least 24GB VRAM for small LoRA runs; prefer 48GB/80GB for 7B experiments |
+| Rent GPU capacity | Finalized config (2026-08-18): Qwen3-32B LoRA multi-task SFT, prefer multi-GPU 80GB-class hardware; local smoke runs use tiny-gpt2 / Qwen2.5-0.5B |
 | Fix validation data | Keep stable `val/test` splits so metrics are not inflated |
-| Train Qwen checkpoint | Use `Qwen/Qwen2.5-7B-Instruct` or a smaller Qwen LoRA baseline |
+| Train Qwen checkpoint | Use `Qwen/Qwen3-32B` with LoRA multi-task SFT (r=16 / alpha=32 / q,k,v,o_proj / lr=1e-4 / 2 epochs / global batch 64) |
 | Evaluate rigorously | Report `final_judgment F1`, `risk_level macro-F1`, `handling macro-F1`, `ban_account FPR` |
 | Analyze errors | Focus on false bans, missed violations, strong-action mistakes, and `mid_risk` gray cases |
 | Feed back hard cases | Convert mistakes into refinement samples and rerun training |

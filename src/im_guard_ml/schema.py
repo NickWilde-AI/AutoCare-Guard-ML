@@ -23,11 +23,12 @@ class HandlingSuggestion(StrEnum):
     BAN_ACCOUNT = "ban_account"
 
 
+# 统一口径（2026-08-18 定稿）：11 类一级违规主题 + 无主题。
+# 赌博/博彩引流话术归入"诈骗引流"主题下的子类，不单列一级主题。
 TOPICS = [
     "代刷/包榜",
     "色情诱导",
     "诈骗引流",
-    "赌博引流",
     "私下交易",
     "政治敏感",
     "辱骂攻击",
@@ -241,6 +242,16 @@ def validate_label(label: dict[str, Any]) -> list[str]:
     if label.get("final_judgment") == FinalJudgment.NOT_VIOLATION.value:
         if label.get("handling_suggestion") not in {HandlingSuggestion.IGNORE.value, HandlingSuggestion.WARNING.value}:
             errors.append("not_exist_violation should not route to limit_account or ban_account")
+    # P2-11：违规结论不得配低风险/忽略处置（业务口径：违规至少 mid_risk + warning）。
+    if label.get("final_judgment") == FinalJudgment.VIOLATION.value:
+        if label.get("risk_level") not in {RiskLevel.MID.value, RiskLevel.HIGH.value}:
+            errors.append("exist_violation requires mid_risk or high_risk")
+        if label.get("handling_suggestion") not in {
+            HandlingSuggestion.WARNING.value,
+            HandlingSuggestion.LIMIT_ACCOUNT.value,
+            HandlingSuggestion.BAN_ACCOUNT.value,
+        }:
+            errors.append("exist_violation cannot route to ignore")
     if label.get("handling_suggestion") == HandlingSuggestion.BAN_ACCOUNT.value:
         if label.get("risk_level") != RiskLevel.HIGH.value or label.get("final_judgment") != FinalJudgment.VIOLATION.value:
             errors.append("ban_account requires high_risk and exist_violation")

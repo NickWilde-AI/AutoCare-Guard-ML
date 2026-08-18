@@ -1,17 +1,22 @@
 model:
-  base_model: Qwen/Qwen2.5-7B-Instruct
+  # 统一模型口径（2026-08-18 定稿）：主模型 Qwen3-32B，LoRA 多任务 SFT。
+  base_model: Qwen/Qwen3-32B
   max_seq_length: 8192
   max_new_tokens: 384
   do_sample: false
 
 versions:
-  model_version: heuristic-demo-v0
+  # 与 configs/model_registry.yaml 的 current_stable 保持一致。
+  model_version: heuristic-public-v0
   prompt_version: prompt-v1
   rubric_version: rubric-v1
   feature_schema_version: feature-schema-v1
   postprocess_version: postprocess-v1
 
 alert_thresholds:
+  # ban_account_rate：ban 占全部请求比例的告警阈值；
+  # 与 rollout.yaml 的 ban_account_fpr（gold 非违规中被误判 ban 的比例红线 0.03）
+  # 分母口径不同，勿混用（P2-45）。
   ban_account_rate_warn: 0.08
   ban_account_rate_critical: 0.12
   parse_non_ok_rate_warn: 0.005
@@ -24,21 +29,24 @@ alert_thresholds:
 training:
   output_dir: outputs/im-audit-judge
   num_train_epochs: 2
-  learning_rate: 0.000002
+  # 统一模型口径（2026-08-18 定稿）：LoRA 学习率 1e-4。
+  learning_rate: 0.0001
   per_device_train_batch_size: 4
-  gradient_accumulation_steps: 4
+  # 4 x 16 = 全局 Batch Size 64，与定稿口径一致。
+  gradient_accumulation_steps: 16
   warmup_ratio: 0.03
   bf16: true
   gradient_checkpointing: true
   completion_only: true
   enable_field_loss_mask: true
   peft:
-    enabled: false
+    enabled: true
     method: lora
     r: 16
     lora_alpha: 32
     lora_dropout: 0.05
-    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+    # 统一模型口径（2026-08-18 定稿）：仅注意力线性层。
+    target_modules: [q_proj, k_proj, v_proj, o_proj]
     qlora_4bit: false
 
 labels:
@@ -49,7 +57,6 @@ labels:
     - 代刷/包榜
     - 色情诱导
     - 诈骗引流
-    - 赌博引流
     - 私下交易
     - 政治敏感
     - 辱骂攻击
@@ -73,10 +80,6 @@ rubrics:
     low_risk: 普通社交联系方式交换，无收益承诺或欺骗要素；
     mid_risk: 出现外部联系方式、项目收益暗示或批量投递迹象；
     high_risk: 明确诱导转外部平台并承诺收益、索取本金、押金或敏感信息。
-  赌博引流: |
-    low_risk: 普通游戏或娱乐话题，无博彩平台、押注或资金诱导；
-    mid_risk: 出现走势、跟单、回血、博彩平台暗示，但未明确拉人或资金往来；
-    high_risk: 明确引流至博彩平台、组织押注、承诺稳赢回报或诱导充值提现。
   私下交易: |
     low_risk: 平台内正常消费咨询；
     mid_risk: 试探私下折扣、外部结算或规避平台抽成；

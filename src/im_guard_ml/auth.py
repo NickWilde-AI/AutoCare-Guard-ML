@@ -8,7 +8,9 @@ from dataclasses import dataclass
 ROLE_PERMISSIONS = {
     "admin": {"read", "write", "audit", "config"},
     "writer": {"write"},
-    "reader": {"read", "config"},
+    # P2-13：reader 不再携带 config 权限，避免最低权限即可读取 rubrics/告警阈值；
+    # /config 等治理接口仅 admin（或未来单独授予的 config 角色）可访问。
+    "reader": {"read"},
     "auditor": {"read", "audit"},
 }
 

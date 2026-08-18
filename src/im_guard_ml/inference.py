@@ -112,6 +112,7 @@ class HeuristicJudge:
 
         # 主题优先级判定：强禁类目（一票否决）优先于泛化的引流/交易类，
         # 避免"加我看片"这类被诈骗/交易关键词抢先吞掉。
+        # 统一口径（2026-08-18 定稿）：11 类一级主题，赌博/博彩引流归入"诈骗引流"。
         topic = "无主题"
         if minor:
             topic = "未成年保护"
@@ -125,9 +126,7 @@ class HeuristicJudge:
             topic = "政治敏感"
         elif brush:
             topic = "代刷/包榜"
-        elif gamble:
-            topic = "赌博引流"
-        elif fraud:
+        elif gamble or fraud:
             topic = "诈骗引流"
         elif trade:
             topic = "私下交易"
@@ -138,15 +137,18 @@ class HeuristicJudge:
         elif abuse:
             topic = "辱骂攻击"
 
-        violation = any([brush, fraud, trade, gamble, porn, politics, abuse, minor, copyright_v, fake_info, self_harm, contraband])
-        violation = violation or (high_behavior and gift_value >= 5000)
+        semantic_hit = any([brush, fraud, trade, gamble, porn, politics, abuse, minor, copyright_v, fake_info, self_harm, contraband])
+        violation = semantic_hit or (high_behavior and gift_value >= 5000)
 
-        # 严重程度判断：强禁类目直接高风险；引流/代刷类需行为或金额印证才升高。
+        # 严重程度判断：强禁类目直接高风险；引流/交易类需行为或金额印证才升高。
+        # P2-21：trade/copyright/fake_info/abuse 在行为+金额印证时也可达 high，
+        # 与 rubric 的"明确约定 + 行为印证"口径一致。
         high = violation and (
             gift_value >= 5000
             or (fraud and high_behavior)
             or (brush and high_behavior)
             or (gamble and high_behavior)
+            or ((trade or copyright_v or fake_info or abuse) and high_behavior)
             or porn
             or politics
             or self_harm
@@ -154,6 +156,12 @@ class HeuristicJudge:
             or minor
         )
         mid = violation and not high
+        # P2-21：mid 且无强行为/大额印证 → 轻度/首次风险走 warning；否则 limit。
+        handling = (
+            "ban_account"
+            if high
+            else ("limit_account" if (mid and (high_behavior or gift_value >= 5000)) else "warning")
+        )
 
         if not violation:
             return {
@@ -165,13 +173,19 @@ class HeuristicJudge:
                 "handling_suggestion": "ignore",
                 "confidence": 0.85,
             }
+        # P2-21：纯行为触发（无语义命中）时，依据文本不得声称"命中违规语义要点"。
+        basis = (
+            "命中违规语义要点，并存在行为侧或上下文证据支撑。"
+            if semantic_hit
+            else "存在异常行为证据（高频/大额等），但未识别到明确违规话术，建议人工复核。"
+        )
         return {
             "risk_level": "high_risk" if high else "mid_risk",
             "topic": topic,
             "correlation_analysis": "聊天语义与行为异常存在同向印证，具备违规风险。",
             "final_judgment": "exist_violation",
-            "judgment_basis": "命中违规语义要点，并存在行为侧或上下文证据支撑。",
-            "handling_suggestion": "ban_account" if high else "limit_account" if mid else "warning",
+            "judgment_basis": basis,
+            "handling_suggestion": handling,
             "confidence": 0.95 if high else 0.88,
         }
 

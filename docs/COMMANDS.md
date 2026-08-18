@@ -225,7 +225,7 @@ PYTHONPATH=src python3 -m im_guard_ml.cli readiness-check --project-root . --out
 make train-readiness
 ```
 
-`train-readiness` 会生成 `outputs/training_readiness.json`，检查训练集、公开数据强处置污染、训练依赖和硬件条件。当前默认 7B 配置需要 GPU 训练环境；无 GPU 本机可以完成数据审计、训练前置验收和小模型完整链路训练，但不适合直接完成高质量 SFT。
+`train-readiness` 会生成 `outputs/training_readiness.json`，检查训练集、公开数据强处置污染、训练依赖和硬件条件。当前默认 Qwen3-32B LoRA 配置（2026-08-18 定稿口径）需要多卡 GPU 训练环境；无 GPU 本机可以完成数据审计、训练前置验收和小模型完整链路训练，但不适合直接完成高质量 32B SFT。
 
 本机 MPS Qwen LoRA：
 

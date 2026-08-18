@@ -1,4 +1,8 @@
 services:
+  # P2-40 接线说明：im-guard-api 与 vllm-judge 是两个独立 profile，
+  # 不会自动联通。要用真实模型服务，需手动设置 im-guard-api 的
+  # QWEN_API_BASE=http://vllm-judge:8001/v1 并以 --api（OpenAI 兼容模式）
+  # 启动，或把合并后的 checkpoint 挂载进 im-guard-api 走 --model-path。
   im-guard-api:
     build:
       context: ..

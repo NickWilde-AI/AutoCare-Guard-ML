@@ -106,11 +106,14 @@ def _numeric_summary(values: list[float]) -> dict[str, float]:
     if not values:
         return {"count": 0, "min": 0.0, "max": 0.0, "mean": 0.0}
     values = sorted(float(v) for v in values)
+    # P50/P95 与 rollout 共用 evaluation.percentile 的线性插值口径（P2-50）。
+    from .evaluation import percentile
+
     return {
         "count": len(values),
         "min": values[0],
-        "p50": values[len(values) // 2],
-        "p95": values[min(len(values) - 1, int(len(values) * 0.95))],
+        "p50": percentile(values, 0.5),
+        "p95": percentile(values, 0.95),
         "max": values[-1],
         "mean": sum(values) / len(values),
     }
@@ -125,6 +128,9 @@ def _gift_value(row: dict[str, Any]) -> float:
 
 
 def _quality_guards(cases: list[dict[str, Any]], predictions: list[dict[str, Any]]) -> dict[str, Any]:
+    # 口径（P2-54）：缺失 parse_status/latency_ms 字段的旧格式 prediction
+    # 会按 None/"ok"/0 计入（演示级统计）；生产 replay 数据应统一由
+    # /judge 或 CLI --with-route 产出（两者均已带 parse_status）。
     total = len(cases) or 1
     ban_count = sum(1 for pred in predictions if pred.get("handling_suggestion") == "ban_account")
     parse_fail = sum(1 for pred in predictions if pred.get("parse_status") not in (None, "ok"))

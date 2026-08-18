@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .dataio import read_jsonl, write_jsonl
+from .schema import TOPICS
 
 
 PUBLIC_TOPIC_MAP = {
@@ -53,10 +54,18 @@ def normalize_internal(row: dict[str, Any], source: str) -> dict[str, Any]:
 
 def normalize_public(row: dict[str, Any], source: str) -> dict[str, Any]:
     content = row.get("content") or row.get("prompt") or row.get("response") or row.get("text") or ""
-    raw_topic = row.get("topic") or row.get("category") or ""
+    raw_topic_text = str(row.get("topic") or row.get("category") or "")
     final = row.get("final_judgment") or row.get("harm_label") or row.get("label")
     final_judgment = "not_exist_violation" if str(final).lower() in {"safe", "0", "false", "not_exist_violation"} else "exist_violation"
-    topic = PUBLIC_TOPIC_MAP.get(str(raw_topic).lower(), row.get("topic", "无主题" if final_judgment == "not_exist_violation" else "虚假信息"))
+    fallback_topic = "无主题" if final_judgment == "not_exist_violation" else "虚假信息"
+    mapped_topic = PUBLIC_TOPIC_MAP.get(raw_topic_text.lower())
+    # P2-19：未映射的原始主题字符串不再直接透传，避免产生 TOPICS 之外的 topic。
+    if mapped_topic:
+        topic = mapped_topic
+    elif raw_topic_text in TOPICS:
+        topic = raw_topic_text
+    else:
+        topic = fallback_topic
     return {
         "ticket_id": stable_id(source, row),
         "audit_scene": {
@@ -160,19 +169,40 @@ def split_rows(
     test_ratio: float = 0.1,
     seed: int = 42,
 ) -> dict[str, list[dict[str, Any]]]:
+    """按工单 ID 隔离的 train/val/test 拆分（P1-17）。
+
+    同一 ticket_id 的多行作为一个整体随机打乱后整组分配，保证任何工单
+    不会同时落入训练集与评测集（主文档 5.4/5.5 口径）。比例按行数目标
+    贪心分配，逐组选择"距离目标最远"的集合，保持近似比例。
+    """
     total_ratio = train_ratio + val_ratio + test_ratio
     if total_ratio <= 0:
         raise ValueError("split ratios must sum to a positive value")
     train_ratio, val_ratio, test_ratio = (train_ratio / total_ratio, val_ratio / total_ratio, test_ratio / total_ratio)
-    shuffled = list(rows)
-    random.Random(seed).shuffle(shuffled)
-    train_end = int(len(shuffled) * train_ratio)
-    val_end = train_end + int(len(shuffled) * val_ratio)
-    return {
-        "train": shuffled[:train_end],
-        "val": shuffled[train_end:val_end],
-        "test": shuffled[val_end:],
-    }
+
+    by_ticket: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        ticket_id = str(row.get("ticket_id", ""))
+        by_ticket.setdefault(ticket_id, []).append(row)
+    groups = list(by_ticket.values())
+    rng = random.Random(seed)
+    rng.shuffle(groups)
+
+    targets = [
+        int(round(len(rows) * train_ratio)),
+        int(round(len(rows) * val_ratio)),
+        int(round(len(rows) * test_ratio)),
+    ]
+    splits: list[list[dict[str, Any]]] = [[], [], []]
+    counts = [0, 0, 0]
+
+    for group in groups:
+        deficits = [targets[i] - counts[i] for i in range(3)]
+        idx = deficits.index(max(deficits))
+        splits[idx].extend(group)
+        counts[idx] += len(group)
+
+    return {"train": splits[0], "val": splits[1], "test": splits[2]}
 
 
 def main(argv: list[str] | None = None) -> int:

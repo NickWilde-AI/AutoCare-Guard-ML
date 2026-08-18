@@ -1,6 +1,6 @@
 """Tests for training module (field-level loss masking)."""
 
-from im_guard_ml.training import _normalize_public_binary_labels, FieldLevelMaskCollator, tokenize_training_case
+from im_guard_ml.training import _normalize_public_binary_labels, tokenize_training_case
 
 
 class TestNormalizePublicBinaryLabels:
@@ -77,7 +77,7 @@ class ToyTokenizer:
         return body
 
 
-def test_tokenize_public_binary_masks_public_risk_and_handling_fields():
+def test_tokenize_public_binary_masks_public_risk_topic_and_handling_fields():
     case = _normalize_public_binary_labels(
         {
             "task_type": "public_binary",
@@ -98,7 +98,10 @@ def test_tokenize_public_binary_masks_public_risk_and_handling_fields():
     risk_start = text.rindex('"risk_level"')
     handling_start = text.rindex('"handling_suggestion"')
     final_start = text.rindex('"final_judgment"')
+    topic_start = text.rindex('"topic"')
 
     assert tokenized["completion_mask"][risk_start] == 0
     assert tokenized["completion_mask"][handling_start] == 0
+    # P2-37：公开数据只监督 final_judgment + 文本字段，topic 一并屏蔽。
+    assert tokenized["completion_mask"][topic_start] == 0
     assert tokenized["completion_mask"][final_start] == 1

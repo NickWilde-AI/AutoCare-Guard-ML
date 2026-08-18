@@ -26,7 +26,16 @@ class PostprocessResult:
 
 
 def postprocess_model_output(raw_output: str, case: dict[str, Any] | None = None) -> PostprocessResult:
-    parsed = parse_judge_output(raw_output)
+    """从模型原始文本出发的完整后处理（解析 → 校验 → 纠错 → 路由）。"""
+    return postprocess_prediction(parse_judge_output(raw_output), case)
+
+
+def postprocess_prediction(parsed: dict[str, Any], case: dict[str, Any] | None = None) -> PostprocessResult:
+    """对已解析的预测 dict 执行校验、纠错与路由（服务层统一入口，P1-01）。
+
+    /judge 与 CLI predict 都必须经过本函数，保证 ban 三重保护与
+    parse_status 可观测性在生产路径生效，而不是只在测试里生效。
+    """
     errors = validate_label(parsed)
     errors.extend(_input_sensitive_errors(parsed, case or {}))
     parse_status = "ok" if not errors else "corrected"
@@ -74,16 +83,31 @@ def _correct_for_production(label: dict[str, Any], errors: list[str]) -> dict[st
     return corrected
 
 
+# 构成 ban 行为证据的异常信号（P2-12：普通描述如"本机登录。"不算证据）。
+_BAN_BEHAVIOR_MARKERS = ("极大额", "大额", "高频", "异地", "批量", "短时间")
+_BAN_MIN_GIFT_VALUE = 5000.0
+
+
 def _input_sensitive_errors(label: dict[str, Any], case: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if label.get("handling_suggestion") == HandlingSuggestion.BAN_ACCOUNT.value:
         behavior_abnormal = case.get("behavior_abnormal_list") or []
         summary = case.get("audit_scene", {}).get("behavior_key_summary", {})
-        has_behavior = bool(behavior_abnormal) or any(
-            summary.get(k) not in (None, "", "无", 0)
-            for k in ("gift_total_value", "gift_total_count", "reward_behavior", "login_behavior")
+        gift_value = _as_float(summary.get("gift_total_value"))
+        signal_text = f"{summary.get('reward_behavior', '')} {summary.get('login_behavior', '')}"
+        has_behavior = (
+            bool(behavior_abnormal)
+            or (gift_value is not None and gift_value >= _BAN_MIN_GIFT_VALUE)
+            or any(marker in signal_text for marker in _BAN_BEHAVIOR_MARKERS)
         )
         if not has_behavior:
             errors.append("behavior evidence missing for ban_account")
     return errors
+
+
+def _as_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 

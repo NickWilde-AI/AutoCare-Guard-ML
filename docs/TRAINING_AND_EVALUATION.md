@@ -170,7 +170,7 @@ im-guard --config configs/default.yaml train data/train/xguard_splits/train.json
 - `enable_field_loss_mask`：保留字段级 loss mask 扩展能力。
 - `bf16` 和 `gradient_checkpointing`：控制显存与吞吐。
 
-当前默认 `configs/default.yaml` 使用公开可访问的 `Qwen/Qwen2.5-7B-Instruct`，完整 SFT 仍需要 GPU 训练环境。本地 Mac 或无 GPU 环境适合跑数据构建、审计、readiness 和小模型 smoke/full-pipeline run，不适合直接完成高质量 7B SFT。
+统一口径（2026-08-18 定稿）：主模型为 `Qwen/Qwen3-32B`，LoRA 多任务 SFT（r=16 / alpha=32 / dropout=0.05 / target=q,k,v,o_proj / lr=1e-4 / 2 Epoch / 全局 Batch 64 / 8192 / BF16），需要多卡 GPU 训练环境。本地 Mac 或无 GPU 环境适合跑数据构建、审计、readiness 和小模型 smoke/full-pipeline run，不适合直接完成高质量 32B LoRA SFT。
 
 本机 MPS LoRA 示例：
 
@@ -192,7 +192,7 @@ PYTHONPATH=src im-guard --config configs/local_fast_full_train.yaml \
 
 该配置使用 `sshleifer/tiny-gpt2` 跑完整训练集，目标是证明数据、tokenize、completion mask、TRL Trainer 和 checkpoint 保存链路可执行。它不是中文 IM 风控质量模型，不能用来宣称识别精度。
 
-LoRA 示例：
+LoRA 示例（与 `configs/default.yaml` 定稿口径一致）：
 
 ```yaml
 training:
@@ -202,6 +202,7 @@ training:
     r: 16
     lora_alpha: 32
     lora_dropout: 0.05
+    target_modules: [q_proj, k_proj, v_proj, o_proj]
 ```
 
 ## 7. 离线预测

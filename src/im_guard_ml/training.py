@@ -7,8 +7,10 @@ from typing import Any
 from .prompting import INFER_TEMPLATE, render_assistant_label, render_user_prompt
 
 # Regex to locate JSON field spans: captures "field_name": "field_value"
+# P2-37：公开二分类数据只监督 final_judgment + 文本字段；
+# risk_level/topic/handling_suggestion 均不参与损失（主文档 5.3/5.6）。
 _FIELD_PATTERN = re.compile(
-    r'"(risk_level|handling_suggestion)"\s*:\s*"[^"]*"'
+    r'"(risk_level|topic|handling_suggestion)"\s*:\s*"[^"]*"'
 )
 
 
@@ -16,7 +18,6 @@ def run_sft(config: dict[str, Any], dataset_name_or_path: str, rubrics: dict[str
     from datasets import load_dataset
     from transformers import AutoTokenizer
     from trl import SFTConfig, SFTTrainer
-    from trl.trainer.sft_trainer import DataCollatorForLanguageModeling
 
     model_name = config["model"]["base_model"]
     train_cfg = config["training"]
@@ -42,11 +43,13 @@ def run_sft(config: dict[str, Any], dataset_name_or_path: str, rubrics: dict[str
         ),
         remove_columns=raw.column_names,
     )
-    collator = DataCollatorForLanguageModeling(
+    # P1-15：不再依赖 TRL 内部类（trl.trainer.sft_trainer.DataCollatorForLanguageModeling
+    # 在 v0.9–v0.12 实际是 transformers 的 MLM collator，按当前参数构造必然 TypeError）。
+    # 使用自研 CompletionMaskCollator：completion_mask 同时携带行级（Prompt 屏蔽）
+    # 与字段级（public_binary 的 risk/topic/handling 屏蔽）信息，对 TRL 版本无依赖。
+    collator = CompletionMaskCollator(
         pad_token_id=tokenizer.pad_token_id,
         max_length=config["model"]["max_seq_length"],
-        truncation_mode="keep_end",
-        completion_only_loss=train_cfg.get("completion_only", True),
     )
 
     args = SFTConfig(
@@ -106,110 +109,55 @@ def tokenize_training_case(
     }
 
 
-class FieldLevelMaskCollator:
-    """Custom collator that masks loss on specific JSON fields for public_binary samples.
+IGNORE_INDEX = -100
 
-    For internal data (history_ticket, level_generator, refinement_hard): all tokens
-    in the assistant response contribute to loss normally.
 
-    For public_binary data: only final_judgment and text fields (topic,
-    correlation_analysis, judgment_basis) contribute to loss. The risk_level and
-    handling_suggestion field tokens are masked (label = -100) so that public data
-    does not teach the model risk grading or handling routing.
+def build_completion_labels(input_ids: list[int], completion_mask: list[int]) -> list[int]:
+    """Pure-function label builder（可无 torch 单测）：
+    只保留 completion_mask==1 的 token 参与损失，其余（Prompt/被屏蔽字段）置 -100。
+    """
+    return [
+        token_id if mask == 1 else IGNORE_INDEX
+        for token_id, mask in zip(input_ids, completion_mask)
+    ]
 
-    This is a two-layer defense:
-      1. Label normalization (belt): public samples are capped at mid_risk/warning.
-      2. Token-level masking (suspenders): even the capped labels are masked from loss
-         so that public samples contribute zero gradient to risk/handling predictions.
+
+class CompletionMaskCollator:
+    """Version-proof collator：padding + completion_mask → labels（P1-15）。
+
+    不依赖 TRL 内部 collator 的构造签名（该签名在 TRL 0.9–0.12 间为 MLM
+    collator），只消费数据集中已有的 input_ids/completion_mask，并负责
+    keep_end 截断与 attention_mask 生成，兼容 SFTTrainer 的普通 callable。
     """
 
-    IGNORE_INDEX = -100
-
-    def __init__(self, response_template: str, tokenizer: Any, formatting_func: Any = None):
-        self.response_template = response_template
-        self.tokenizer = tokenizer
-        self.formatting_func = formatting_func
-        self._response_token_ids = tokenizer.encode(
-            response_template, add_special_tokens=False
-        )
+    def __init__(self, pad_token_id: int, max_length: int | None = None):
+        self.pad_token_id = pad_token_id
+        self.max_length = max_length
 
     def __call__(self, features: list[dict[str, Any]]) -> dict[str, Any]:
         import torch
 
-        batch_input_ids = []
-        batch_attention_mask = []
-        batch_labels = []
-
+        input_ids_list: list[torch.Tensor] = []
+        labels_list: list[torch.Tensor] = []
         for feature in features:
-            input_ids = feature["input_ids"]
-            attention_mask = feature.get("attention_mask", [1] * len(input_ids))
-            is_public = feature.get("is_public_binary", False)
+            ids = list(feature["input_ids"])
+            mask = list(feature.get("completion_mask", [1] * len(ids)))
+            if self.max_length and len(ids) > self.max_length:
+                # keep_end 截断：与 SFTConfig.max_length 对齐，ids 与 mask 同步截断。
+                ids = ids[-self.max_length:]
+                mask = mask[-self.max_length:]
+            labels = build_completion_labels(ids, mask)
+            input_ids_list.append(torch.tensor(ids, dtype=torch.long))
+            labels_list.append(torch.tensor(labels, dtype=torch.long))
 
-            # Build labels: mask prompt tokens (before response prefix)
-            labels = list(input_ids)
-            response_start = self._find_response_start(input_ids)
-            for i in range(response_start):
-                labels[i] = self.IGNORE_INDEX
-
-            # For public_binary samples: additionally mask risk_level and
-            # handling_suggestion field tokens within the response
-            if is_public:
-                self._mask_fields_in_response(
-                    input_ids, labels, response_start
-                )
-
-            batch_input_ids.append(torch.tensor(input_ids, dtype=torch.long))
-            batch_attention_mask.append(torch.tensor(attention_mask, dtype=torch.long))
-            batch_labels.append(torch.tensor(labels, dtype=torch.long))
-
-        return {
-            "input_ids": torch.nn.utils.rnn.pad_sequence(
-                batch_input_ids, batch_first=True, padding_value=self.tokenizer.pad_token_id
-            ),
-            "attention_mask": torch.nn.utils.rnn.pad_sequence(
-                batch_attention_mask, batch_first=True, padding_value=0
-            ),
-            "labels": torch.nn.utils.rnn.pad_sequence(
-                batch_labels, batch_first=True, padding_value=self.IGNORE_INDEX
-            ),
-        }
-
-    def _find_response_start(self, input_ids: list[int]) -> int:
-        """Find the token position right after the response template."""
-        template_len = len(self._response_token_ids)
-        for i in range(len(input_ids) - template_len + 1):
-            if input_ids[i : i + template_len] == self._response_token_ids:
-                return i + template_len
-        return 0
-
-    def _mask_fields_in_response(
-        self, input_ids: list[int], labels: list[int], response_start: int
-    ) -> None:
-        """Mask tokens corresponding to risk_level and handling_suggestion fields."""
-        # Decode the response portion to find field spans
-        response_ids = input_ids[response_start:]
-        response_text = self.tokenizer.decode(response_ids, skip_special_tokens=False)
-
-        for match in _FIELD_PATTERN.finditer(response_text):
-            # Find the character span of the matched field
-            char_start, char_end = match.start(), match.end()
-            # Map character positions back to token positions
-            tok_start = self._char_to_token_pos(response_ids, char_start)
-            tok_end = self._char_to_token_pos(response_ids, char_end)
-            # Mask these tokens in labels
-            for idx in range(response_start + tok_start, response_start + tok_end):
-                if idx < len(labels):
-                    labels[idx] = self.IGNORE_INDEX
-
-    def _char_to_token_pos(self, token_ids: list[int], char_pos: int) -> int:
-        """Map a character position in decoded text to a token index."""
-        accumulated = 0
-        for i, tid in enumerate(token_ids):
-            token_text = self.tokenizer.decode([tid], skip_special_tokens=False)
-            accumulated += len(token_text)
-            if accumulated >= char_pos:
-                return i + 1
-        return len(token_ids)
+        input_ids = torch.nn.utils.rnn.pad_sequence(
+            input_ids_list, batch_first=True, padding_value=self.pad_token_id
+        )
+        attention_mask = (input_ids != self.pad_token_id).long()
+        labels = torch.nn.utils.rnn.pad_sequence(
+            labels_list, batch_first=True, padding_value=IGNORE_INDEX
+        )
+        return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
 
 def _normalize_public_binary_labels(case: dict[str, Any]) -> dict[str, Any]:

@@ -1,3 +1,5 @@
+# 本地 MPS 冒烟配置：仅验证 LoRA 训练代码路径，不代表主模型口径。
+# 主模型口径（2026-08-18 定稿）见 configs/default.yaml：Qwen3-32B、LoRA 多任务 SFT。
 model:
   base_model: Qwen/Qwen2.5-0.5B-Instruct
   max_seq_length: 512
@@ -7,6 +9,7 @@ model:
 training:
   output_dir: outputs/im-audit-judge-local-mps
   num_train_epochs: 1
+  # 冒烟配置的学习率/批次为本地小模型调试值；主模型口径为 lr 1e-4、全局 Batch 64。
   learning_rate: 0.00002
   per_device_train_batch_size: 1
   gradient_accumulation_steps: 16
@@ -18,10 +21,11 @@ training:
   peft:
     enabled: true
     method: lora
-    r: 8
-    lora_alpha: 16
+    # LoRA 结构参数与定稿口径一致。
+    r: 16
+    lora_alpha: 32
     lora_dropout: 0.05
-    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+    target_modules: [q_proj, k_proj, v_proj, o_proj]
     qlora_4bit: false
 
 rubrics:

@@ -4,6 +4,24 @@ candidate: ""
 
 # Schema example only. This is not an internal registry export, a model-quality
 # report, or evidence of a production approval.
+
+# P2-10：真实候选模型晋升时，取消下面 promotion_guardrails 的注释并在该模型
+# 的 metrics 中填入真实评测数字；model-registry-check 将按这些红线校验
+# （min_* 为"不低于"、max_* 为"不高于"）。示例模型 metrics 为空时不校验护栏。
+# promotion_guardrails:
+#   min_final_judgment_f1: 0.8
+#   min_handling_macro_f1: 0.7
+#   max_ban_account_fpr: 0.03
+#   max_parse_non_ok_rate: 0.02
+#   max_p95_latency_ms: 1200
+# 示例 metrics（与 guardrails 配套演示，不构成本仓库的模型质量声明）：
+#   metrics:
+#     final_judgment_f1: 0.9
+#     handling_macro_f1: 0.8
+#     ban_account_fpr: 0.01
+#     parse_non_ok_rate: 0.0
+#     p95_latency_ms: 600
+
 models:
   - model_version: heuristic-public-v0
     status: stable

@@ -63,7 +63,7 @@ def test_build_readiness_check_warns_when_only_local_data_missing(tmp_path):
         "docs/COMMANDS.md",
         "docs/POLICY_CHANGELOG.md",
         "docs/LOCAL_ENV_ROOT_CAUSE.md",
-        "tests/test_docs_consistency.py",
+        "tests/test_config_consistency.py",
         ".github/workflows/ci.yml",
         "src/im_guard_ml/api_contract.py",
         "src/im_guard_ml/preflight.py",

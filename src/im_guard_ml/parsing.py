@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any
 
-from .schema import AuditLabel, HandlingSuggestion, RiskLevel, validate_label
+from .schema import AuditLabel, FinalJudgment, HandlingSuggestion, RiskLevel, validate_label
 
 
 ENUM_PATTERNS = {
@@ -65,8 +65,15 @@ def parse_judge_output(text: str, strict: bool = False) -> dict[str, Any]:
     if errors:
         if parsed.get("handling_suggestion") == HandlingSuggestion.BAN_ACCOUNT.value:
             parsed["handling_suggestion"] = HandlingSuggestion.LIMIT_ACCOUNT.value
-        if parsed.get("final_judgment") == "not_exist_violation":
+        if parsed.get("final_judgment") == FinalJudgment.NOT_VIOLATION.value:
             parsed["risk_level"] = RiskLevel.LOW.value
             parsed["handling_suggestion"] = HandlingSuggestion.IGNORE.value
+        # P2-11：exist_violation 不得配 low_risk/ignore，兜底纠为 mid_risk/warning，
+        # 避免"违规结论 + 安全处置"的矛盾组合被静默 auto_close。
+        if parsed.get("final_judgment") == FinalJudgment.VIOLATION.value:
+            if parsed.get("risk_level") == RiskLevel.LOW.value:
+                parsed["risk_level"] = RiskLevel.MID.value
+            if parsed.get("handling_suggestion") == HandlingSuggestion.IGNORE.value:
+                parsed["handling_suggestion"] = HandlingSuggestion.WARNING.value
     return parsed
 

@@ -2,12 +2,18 @@
 
 Implements the 3-source heterogeneous committee described in the design doc:
   1. Self (current round Judge) — fine-tuned model prediction
-  2. Qwen3.5-flash (API) — independent LLM perspective via prompt engineering
+  2. Independent general LLM (API) — an unfinetuned LLM perspective via prompt engineering
   3. Rule engine — non-LLM keyword + threshold baseline
 
+统一口径（2026-08-18 定稿）：难例由"独立通用大模型 + 业务规则 + 人工审核"
+多方交叉确认，判别源保持异构，避免同源模型互相背书。
+
 The committee is used during iterative refinement to filter noisy gold labels:
-if all three sources agree on not_exist_violation, the sample is considered
-reliably safe and excluded from hard-sample injection.
+the current-round model only decides "missed violation"; if the independent
+LLM and the rule engine both agree on not_exist_violation, the sample is
+considered reliably safe and excluded from hard-sample injection. The human
+review leg of the design doc is carried out by the data & review team outside
+this code path.
 """
 
 from __future__ import annotations
@@ -43,17 +49,18 @@ def build_self_predictor(
     return predict
 
 
-def build_flash_predictor(
+def build_independent_llm_predictor(
     rubrics: dict[str, str],
-    model_name: str = "qwen3.5-flash",
+    model_name: str = "qwen-plus",
     api_base: str | None = None,
     api_key: str | None = None,
 ) -> Predictor:
-    """Build a predictor that calls Qwen3.5-flash via OpenAI-compatible API.
+    """Build a predictor that calls an independent general LLM via OpenAI-compatible API.
 
     Uses the same prompt template as the fine-tuned model but relies on the
-    flash model's zero-shot capability. This provides an independent LLM
-    perspective that hasn't been fine-tuned on our data.
+    general model's zero-shot capability. This provides an independent LLM
+    perspective that hasn't been fine-tuned on our data (heterogeneous source
+    per the committee design).
     """
     import httpx
 
@@ -80,7 +87,7 @@ def build_flash_predictor(
             content = resp.json()["choices"][0]["message"]["content"]
             return parse_judge_output(content)
         except Exception as e:
-            logger.warning("flash predictor failed: %s, defaulting to safe", e)
+            logger.warning("independent LLM predictor failed: %s, defaulting to safe", e)
             return {"final_judgment": "not_exist_violation", "risk_level": "low_risk",
                     "handling_suggestion": "ignore"}
 
@@ -168,7 +175,7 @@ def run_refinement_round(
     model_path: str,
     rubrics: dict[str, str],
     *,
-    flash_model: str = "qwen3.5-flash",
+    independent_model: str = "qwen-plus",
     rule_thresholds: dict[str, Any] | None = None,
     device: str = "cuda",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -179,10 +186,14 @@ def run_refinement_round(
     """
     logger.info("Building committee predictors...")
     self_pred = build_self_predictor(model_path, rubrics, device=device)
-    flash_pred = build_flash_predictor(rubrics, model_name=flash_model)
+    llm_pred = build_independent_llm_predictor(rubrics, model_name=independent_model)
     rule_pred = build_rule_engine_predictor(rule_thresholds)
 
-    committee = [self_pred, flash_pred, rule_pred]
+    # P1-16：self 只作"模型漏判"判定器（judge_predict），不再进入 committee 投票，
+    # 避免同源背书与重复前向；committee 由异构判别源组成——
+    # 独立通用大模型 + 规则引擎；主文档口径中的"人工审核"由数据与审核团队
+    # 在多方复核环节承接（见主文档 6.3），代码内不再用 self 顶替。
+    committee = [llm_pred, rule_pred]
 
     logger.info(
         "Running refinement: train=%d, candidates=%d",

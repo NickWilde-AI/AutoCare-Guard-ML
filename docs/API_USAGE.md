@@ -67,7 +67,7 @@ export IM_GUARD_API_TOKEN_HASHES="a2b...64位hex...9f:writer,0f3...64位hex...1c
 | --- | --- | --- | --- |
 | `GET` | `/health` | 无 | 存活检查 |
 | `GET` | `/ready` | 无 | 就绪检查和生产 guard 配置摘要 |
-| `GET` | `/config` | `read` | 配置摘要 |
+| `GET` | `/config` | `config` | 配置摘要（治理权限，最低为 admin） |
 | `POST` | `/judge` | `write` | 提交审核样本 |
 | `GET` | `/dashboard/data?window=5m|1h|all` | `read` | 监控大盘数据 |
 | `GET` | `/metrics` | 无 | Prometheus 文本指标 |

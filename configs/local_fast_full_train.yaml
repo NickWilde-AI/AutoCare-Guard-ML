@@ -1,3 +1,6 @@
+# 本地快速完整链路冒烟配置：tiny-gpt2 全量跑通数据/tokenize/mask/训练/保存链路。
+# 仅用于验证工程代码路径，不代表中文 IM 风控效果；主模型口径（2026-08-18 定稿）
+# 见 configs/default.yaml：Qwen3-32B、LoRA 多任务 SFT。
 model:
   base_model: sshleifer/tiny-gpt2
   max_seq_length: 128
@@ -7,6 +10,7 @@ model:
 training:
   output_dir: outputs/im-audit-judge-fast-full
   num_train_epochs: 1
+  # 冒烟配置的调试值；主模型口径为 lr 1e-4、2 Epoch、全局 Batch 64。
   learning_rate: 0.00005
   per_device_train_batch_size: 32
   gradient_accumulation_steps: 1

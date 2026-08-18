@@ -40,13 +40,25 @@ EVIDENCE_COMBOS = [
     "semantic_light_behavior_heavy",    # 语义淡 + 行为重 (灰区)
 ]
 
+# 证据组合 → (语义证据强弱, 行为证据强弱)
+EVIDENCE_STRENGTH = {
+    "semantic_heavy_behavior_heavy": ("强", "强"),
+    "semantic_only": ("强", "弱"),
+    "behavior_only": ("弱", "强"),
+    "semantic_light_behavior_heavy": ("弱", "强"),
+}
+
 # Generation prompt template for the level-specific generator
+# P2-18：控制条件补全主文档 6.2 的五个维度（主题/风险/语义强弱/行为强弱/处置档位）。
 GENERATOR_PROMPT = """你是一个 IM 私聊审核案例生成器。请根据以下条件生成一条完整的审核案例。
 
 <生成条件>
 目标风险等级: {risk_level}
 目标违规主题: {topic}
 证据组合类型: {evidence_combo}
+语义证据强弱: {semantic_strength}
+行为证据强弱: {behavior_strength}
+目标处置档位: {handling}
 </生成条件>
 
 <风险等级 rubric>
@@ -61,7 +73,7 @@ GENERATOR_PROMPT = """你是一个 IM 私聊审核案例生成器。请根据以
 
 要求：
 1. 证据内容必须符合目标风险等级的 rubric 定义
-2. 证据组合类型决定语义和行为的强弱分布
+2. 语义/行为证据强弱与目标处置档位必须符合生成条件
 3. 输出严格 JSON 格式"""
 
 
@@ -151,11 +163,16 @@ def build_generator_training_data(
             combo = "semantic_only"
 
         rubric_text = rubrics.get(topic, rubrics.get("__default__", ""))
+        semantic_strength, behavior_strength = EVIDENCE_STRENGTH[combo]
+        handling = label.get("handling_suggestion", "ignore")
 
         prompt = GENERATOR_PROMPT.format(
             risk_level=level,
             topic=topic,
             evidence_combo=combo,
+            semantic_strength=semantic_strength,
+            behavior_strength=behavior_strength,
+            handling=handling,
             rubric=rubric_text,
         )
 
@@ -169,6 +186,10 @@ def build_generator_training_data(
 
 def validate_generated_case(case: dict[str, Any]) -> tuple[bool, list[str]]:
     """Validate a generated case against schema and rubric consistency.
+
+    P2-17：本函数覆盖结构性与标签一致性校验（Schema/枚举/ban-行为证据/
+    高风险证据存在性）；"聊天与行为语义一致性"的深检由数据与审核团队的
+    多方复核环节承接（主文档 6.2 第 3 步），代码侧无法替代人工语义判断。
 
     Returns (is_valid, list_of_errors).
     """

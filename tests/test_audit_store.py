@@ -18,7 +18,7 @@ def test_sqlite_audit_store_appends_and_finds_by_ticket(tmp_path):
         "request_id": "r1",
         "ticket_id": "t1",
         "timestamp": "2026-06-06 00:00:00",
-        "model_mode": "heuristic-demo",
+        "model_mode": "heuristic",
         "model_version": "m",
         "prompt_version": "p",
         "rubric_version": "r",
