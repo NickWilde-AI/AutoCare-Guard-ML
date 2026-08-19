@@ -145,3 +145,12 @@ def test_rubrics_subtopic_count_is_representative_44():
     assert subtopic_total == 44
     text = (ROOT / "configs" / "rubrics.yaml").read_text(encoding="utf-8")
     assert "47" in text and "代表性" in text
+
+
+def test_gitignore_blocks_private_and_outputs_directories():
+    # 安全红线：private/（个人定稿文档、面试材料）与 outputs/（门禁产物）
+    # 绝不允许进入公开仓库；.gitignore 条目缺失即测试失败。
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "private/" in gitignore
+    assert "outputs/" in gitignore
+    assert "data/local/" in gitignore
