@@ -1,30 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: im-guard-api
+  name: autocare-guard-api
 spec:
   # SQLite/PVC audit storage is a single-node showcase default.
   # Scale replicas only after switching audit storage to PostgreSQL or a log platform.
   replicas: 1
   selector:
     matchLabels:
-      app: im-guard-api
+      app: autocare-guard-api
   template:
     metadata:
       labels:
-        app: im-guard-api
+        app: autocare-guard-api
     spec:
       containers:
         - name: api
-          image: ai-im-guard-ml:latest
+          image: ai-autocare-guard-ml:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
           envFrom:
             - configMapRef:
-                name: im-guard-api-config
+                name: autocare-guard-api-config
             - secretRef:
-                name: im-guard-api-secret
+                name: autocare-guard-api-secret
           volumeMounts:
             - name: audit-output
               mountPath: /app/outputs
@@ -50,4 +50,4 @@ spec:
       volumes:
         - name: audit-output
           persistentVolumeClaim:
-            claimName: im-guard-audit-pvc
+            claimName: autocare-guard-audit-pvc

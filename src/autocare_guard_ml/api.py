@@ -79,19 +79,19 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
         judge = HeuristicJudge(rubrics)
     versions = version_info_from_config(cfg, model_path)
     mode = "api" if api else ("checkpoint" if model_path else "heuristic")
-    app = FastAPI(title="AI IM Guard ML", version="0.1.0")
+    app = FastAPI(title="AutoCare Guard ML", version="0.1.0")
     auth_config = parse_auth_config(
-        os.environ.get("IM_GUARD_API_TOKEN", ""),
-        os.environ.get("IM_GUARD_API_TOKENS", ""),
-        os.environ.get("IM_GUARD_API_TOKEN_HASHES", ""),
+        os.environ.get("AUTOCARE_GUARD_API_TOKEN", ""),
+        os.environ.get("AUTOCARE_GUARD_API_TOKENS", ""),
+        os.environ.get("AUTOCARE_GUARD_API_TOKEN_HASHES", ""),
     )
-    audit_log_path = Path(os.environ.get("IM_GUARD_AUDIT_LOG_PATH", "outputs/api_audit_events.jsonl"))
-    audit_backend = os.environ.get("IM_GUARD_AUDIT_BACKEND", "jsonl")
+    audit_log_path = Path(os.environ.get("AUTOCARE_GUARD_AUDIT_LOG_PATH", "outputs/api_audit_events.jsonl"))
+    audit_backend = os.environ.get("AUTOCARE_GUARD_AUDIT_BACKEND", "jsonl")
     audit_store = create_audit_store(audit_backend, audit_log_path)
-    cors_origins = _parse_cors_origins(os.environ.get("IM_GUARD_CORS_ORIGINS", "*"))
-    max_request_bytes = _parse_int_env("IM_GUARD_MAX_REQUEST_BYTES", 262_144)
+    cors_origins = _parse_cors_origins(os.environ.get("AUTOCARE_GUARD_CORS_ORIGINS", "*"))
+    max_request_bytes = _parse_int_env("AUTOCARE_GUARD_MAX_REQUEST_BYTES", 262_144)
     # 默认 120 与 deploy/env 示例及 docs 一致（P2-07）。
-    rate_limit_per_minute = _parse_int_env("IM_GUARD_RATE_LIMIT_PER_MINUTE", 120)
+    rate_limit_per_minute = _parse_int_env("AUTOCARE_GUARD_RATE_LIMIT_PER_MINUTE", 120)
 
     app.add_middleware(
         CORSMiddleware,
@@ -145,7 +145,7 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
         request.state.request_id = request_id
         content_length = request.headers.get("Content-Length")
         if content_length and int(content_length) > max_request_bytes:
-            return _error_response(413, "request_too_large", "request body exceeds IM_GUARD_MAX_REQUEST_BYTES", request_id)
+            return _error_response(413, "request_too_large", "request body exceeds AUTOCARE_GUARD_MAX_REQUEST_BYTES", request_id)
         # 只读/监控路径不计入限流
         _no_ratelimit = ("/health", "/ready", "/dashboard/data", "/metrics", "/static")
         if rate_limit_per_minute > 0 and not any(request.url.path.startswith(p) for p in _no_ratelimit):
@@ -426,60 +426,60 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
         route_counts = Counter(str(e.get("route", "unknown")) for e in all_events)
         latency_stats = _latency_stats([float(e.get("latency_ms", 0) or 0) for e in all_events])
         lines = [
-            "# HELP im_guard_requests_total Total audit requests.",
-            "# TYPE im_guard_requests_total counter",
-            f"im_guard_requests_total {c['requests_total']}",
-            "# HELP im_guard_requests_by_risk_total Audit requests by risk level.",
-            "# TYPE im_guard_requests_by_risk_total counter",
+            "# HELP autocare_guard_requests_total Total audit requests.",
+            "# TYPE autocare_guard_requests_total counter",
+            f"autocare_guard_requests_total {c['requests_total']}",
+            "# HELP autocare_guard_requests_by_risk_total Audit requests by risk level.",
+            "# TYPE autocare_guard_requests_by_risk_total counter",
         ]
-        lines.extend(f'im_guard_requests_by_risk_total{{risk_level="{_label(k)}"}} {v}' for k, v in sorted(risk_counts.items()))
+        lines.extend(f'autocare_guard_requests_by_risk_total{{risk_level="{_label(k)}"}} {v}' for k, v in sorted(risk_counts.items()))
         lines.extend(
             [
-                "# HELP im_guard_requests_by_topic_total Audit requests by topic.",
-                "# TYPE im_guard_requests_by_topic_total counter",
+                "# HELP autocare_guard_requests_by_topic_total Audit requests by topic.",
+                "# TYPE autocare_guard_requests_by_topic_total counter",
             ]
         )
-        lines.extend(f'im_guard_requests_by_topic_total{{topic="{_label(k)}"}} {v}' for k, v in sorted(topic_counts.items()))
+        lines.extend(f'autocare_guard_requests_by_topic_total{{topic="{_label(k)}"}} {v}' for k, v in sorted(topic_counts.items()))
         lines.extend(
             [
-                "# HELP im_guard_requests_by_action_total Audit requests by recommended action.",
-                "# TYPE im_guard_requests_by_action_total counter",
+                "# HELP autocare_guard_requests_by_action_total Audit requests by recommended action.",
+                "# TYPE autocare_guard_requests_by_action_total counter",
             ]
         )
         lines.extend(
-            f'im_guard_requests_by_action_total{{recommended_action="{_label(k)}"}} {v}'
+            f'autocare_guard_requests_by_action_total{{recommended_action="{_label(k)}"}} {v}'
             for k, v in sorted(action_counts.items())
         )
         # 兼容旧 Prometheus 规则标签名
         lines.extend(
             [
-                "# HELP im_guard_requests_by_handling_total Audit requests by recommended action (legacy label).",
-                "# TYPE im_guard_requests_by_handling_total counter",
+                "# HELP autocare_guard_requests_by_handling_total Audit requests by recommended action (legacy label).",
+                "# TYPE autocare_guard_requests_by_handling_total counter",
             ]
         )
         lines.extend(
-            f'im_guard_requests_by_handling_total{{handling_suggestion="{_label(k)}"}} {v}'
+            f'autocare_guard_requests_by_handling_total{{handling_suggestion="{_label(k)}"}} {v}'
             for k, v in sorted(action_counts.items())
         )
         lines.extend(
             [
-                "# HELP im_guard_requests_by_route_total Audit requests by route.",
-                "# TYPE im_guard_requests_by_route_total counter",
+                "# HELP autocare_guard_requests_by_route_total Audit requests by route.",
+                "# TYPE autocare_guard_requests_by_route_total counter",
             ]
         )
-        lines.extend(f'im_guard_requests_by_route_total{{route="{_label(k)}"}} {v}' for k, v in sorted(route_counts.items()))
+        lines.extend(f'autocare_guard_requests_by_route_total{{route="{_label(k)}"}} {v}' for k, v in sorted(route_counts.items()))
         lines.extend(
             [
-                "# HELP im_guard_latency_ms API latency summary gauges.",
-                "# TYPE im_guard_latency_ms gauge",
+                "# HELP autocare_guard_latency_ms API latency summary gauges.",
+                "# TYPE autocare_guard_latency_ms gauge",
             ]
         )
-        lines.extend(f'im_guard_latency_ms{{quantile="{k}"}} {v}' for k, v in sorted(latency_stats.items()))
+        lines.extend(f'autocare_guard_latency_ms{{quantile="{k}"}} {v}' for k, v in sorted(latency_stats.items()))
         lines.extend(
             [
-                "# HELP im_guard_parse_non_ok_total Total non-ok parse results.",
-                "# TYPE im_guard_parse_non_ok_total counter",
-                f"im_guard_parse_non_ok_total {c['parse_non_ok_total']}",
+                "# HELP autocare_guard_parse_non_ok_total Total non-ok parse results.",
+                "# TYPE autocare_guard_parse_non_ok_total counter",
+                f"autocare_guard_parse_non_ok_total {c['parse_non_ok_total']}",
                 "",
             ]
         )

@@ -7,7 +7,7 @@ model:
   do_sample: false
 
 training:
-  output_dir: outputs/im-audit-judge-local-mps
+  output_dir: outputs/autocare-risk-judge-local-mps
   num_train_epochs: 1
   # 冒烟配置的学习率/批次为本地小模型调试值；主模型口径为 lr 1e-4、全局 Batch 64。
   learning_rate: 0.00002

@@ -1,6 +1,6 @@
 """Tests for AutoCare schema validation."""
 
-from im_guard_ml.schema import (
+from autocare_guard_ml.schema import (
     AuditCase,
     AuditLabel,
     EVENT_TOPICS,
@@ -62,7 +62,7 @@ class TestValidateLabel:
         assert validate_label(label) == []
 
     def test_legacy_fields_accepted(self):
-        # 旧字段名 + 旧 IM 枚举值应被 remap 后通过
+        # legacy 字段名 + legacy 枚举值应被 remap 后通过
         label = {
             "risk_level": "low_risk",
             "final_judgment": "not_exist_violation",
@@ -155,15 +155,17 @@ class TestServiceCase:
         assert case.label is None
 
     def test_from_dict_legacy_fields(self):
+        # legacy 字段名兼容：ticket_id / audit_scene / chat_evidence_list
         data = {
             "ticket_id": "test-001",
-            "audit_scene": {"chat_type": "IM私聊"},
-            "chat_evidence_list": [],
-            "behavior_abnormal_list": [],
+            "audit_scene": {"channel": "app_service"},
+            "chat_evidence_list": [{"original_content": "充电时闻到焦糊味。"}],
+            "behavior_abnormal_list": [{"fault_code": "BMS_THERMAL_WARN"}],
         }
         case = AuditCase.from_dict(data)
         assert case.case_id == "test-001"
-        assert case.service_context.get("chat_type") == "IM私聊"
+        assert case.service_context.get("channel") == "app_service"
+        assert case.conversation_evidence[0]["original_content"] == "充电时闻到焦糊味。"
 
     def test_from_dict_with_label(self):
         data = {

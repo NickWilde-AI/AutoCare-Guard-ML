@@ -1,4 +1,4 @@
-"""口径一致性测试：锁定 AutoCare 领域口径，防止 IM 旧口径回流。
+"""口径一致性测试：锁定 AutoCare 售后风险研判口径，防止旧枚举/旧字段回流。
 
 统一口径：
 - 主模型 Qwen3-32B，LoRA 多任务 SFT；
@@ -11,8 +11,8 @@ from pathlib import Path
 
 import yaml
 
-from im_guard_ml.config import DEFAULT_CONFIG
-from im_guard_ml.schema import EVENT_TOPICS, TOPICS
+from autocare_guard_ml.config import DEFAULT_CONFIG
+from autocare_guard_ml.schema import EVENT_TOPICS, TOPICS
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -32,10 +32,10 @@ FINALIZED_TOPICS = [
 OLD_MODEL_MARKERS = [
     "27B", "27b", "35B", "35b",
     "Qwen3.5", "qwen3.5", "Qwen3.6", "qwen3.6",
-    "qwen35-27b", "im-judge-qwen27b", "Qwen2.5-7B",
+    "qwen35-27b", "legacy-judge-qwen27b", "Qwen2.5-7B",
 ]
 OLD_LEARNING_RATES = [0.000002, 0.000001, 2e-6, 1e-6, 2.0e-5]
-IM_TOPIC_MARKERS = ["代刷/包榜", "色情诱导", "诈骗引流", "ban_account", "exist_violation"]
+LEGACY_TOPIC_MARKERS = ["代刷/包榜", "色情诱导", "诈骗引流", "ban_account", "exist_violation"]
 
 
 def _load_default_yaml() -> dict:
@@ -112,8 +112,8 @@ def test_no_old_model_markers_in_code_defaults():
         text = (ROOT / rel).read_text(encoding="utf-8")
         for marker in OLD_MODEL_MARKERS:
             assert marker not in text, f"旧模型口径 {marker} 不应出现在 {rel}"
-        for marker in IM_TOPIC_MARKERS:
-            assert marker not in text, f"IM 旧口径 {marker} 不应出现在 {rel}"
+        for marker in LEGACY_TOPIC_MARKERS:
+            assert marker not in text, f"旧口径 {marker} 不应出现在 {rel}"
 
     assert DEFAULT_CONFIG["model"]["base_model"] == "Qwen/Qwen3-32B"
     training = DEFAULT_CONFIG["training"]

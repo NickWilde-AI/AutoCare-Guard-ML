@@ -1,11 +1,21 @@
 # Local data
 
-The repository does not include real chat records or an internal test set. Put authorized and redacted JSONL files under `data/local/`; that directory is ignored by Git.
+本仓库不包含真实售后工单、车主数据或内部测试集。请将已授权且脱敏的 JSONL 放在 `data/local/`（该目录被 Git 忽略）。
 
-Minimal input shape:
+最小输入形态：
 
 ```json
-{"ticket_id":"local-example-id","chat_evidence_list":["redacted text"],"behavior_abnormal_list":[]}
+{
+  "case_id": "local-example-id",
+  "conversation_evidence": [
+    {"role": "owner", "text": "充电中闻到焦糊味，车机提示高压异常。"}
+  ],
+  "vehicle_signal_summary": {
+    "motion_state": "charging",
+    "warning_lights": ["高压系统告警"]
+  },
+  "fault_evidence": []
+}
 ```
 
-See `src/im_guard_ml/schema.py` and `docs/TRAINING_AND_EVALUATION.md` for the complete schema and evaluation workflow.
+完整 schema 与评测流程见 `src/autocare_guard_ml/schema.py` 与 `docs/TRAINING_AND_EVALUATION.md`。

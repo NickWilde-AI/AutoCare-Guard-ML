@@ -1,6 +1,6 @@
 """Tests for AutoCare postprocessing and routing logic."""
 
-from im_guard_ml.postprocess import postprocess_model_output, route_policy
+from autocare_guard_ml.postprocess import postprocess_model_output, route_policy
 
 
 class TestRoutePolicy:

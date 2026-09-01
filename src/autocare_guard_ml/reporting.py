@@ -15,7 +15,7 @@ REQUIRED_DELIVERY_FILES = {
     "公开数据接入说明": "docs/PUBLIC_DATASET_XGUARD.md",
     "公开实现边界评审": "docs/ENTERPRISE_READINESS_REVIEW.md",
     "训练与评测流程": "docs/TRAINING_AND_EVALUATION.md",
-    "训练前 readiness": "src/im_guard_ml/training_readiness.py",
+    "训练前 readiness": "src/autocare_guard_ml/training_readiness.py",
     "训练前 readiness 测试": "tests/test_training_readiness.py",
     "人审与灰度治理": "docs/HUMAN_REVIEW_AND_ROLLOUT.md",
     "SLO 与告警": "docs/SLO_AND_ALERTING.md",
@@ -25,16 +25,16 @@ REQUIRED_DELIVERY_FILES = {
     "策略变更记录": "docs/POLICY_CHANGELOG.md",
     "本地 UTF-8 环境根因": "docs/LOCAL_ENV_ROOT_CAUSE.md",
     "GitHub CI 质量门禁": ".github/workflows/ci.yml",
-    "API 契约导出与校验": "src/im_guard_ml/api_contract.py",
-    "生产环境 preflight 检查": "src/im_guard_ml/preflight.py",
+    "API 契约导出与校验": "src/autocare_guard_ml/api_contract.py",
+    "生产环境 preflight 检查": "src/autocare_guard_ml/preflight.py",
     "模型注册表": "configs/model_registry.yaml",
-    "模型注册表校验": "src/im_guard_ml/model_registry.py",
-    "A/B 灰度对比实现": "src/im_guard_ml/rollout.py",
+    "模型注册表校验": "src/autocare_guard_ml/model_registry.py",
+    "A/B 灰度对比实现": "src/autocare_guard_ml/rollout.py",
     "Dockerfile": "deploy/Dockerfile",
     "Docker Compose": "deploy/docker-compose.example.yml",
     "K8s 模板": "deploy/k8s/deployment.yaml",
     "部署模板测试": "tests/test_deployment_templates.py",
-    "Prometheus 告警": "deploy/prometheus/im_guard_alerts.yaml",
+    "Prometheus 告警": "deploy/prometheus/autocare_guard_alerts.yaml",
     "XGuard 下载脚本": "scripts/download_xguard_dataset.py",
     "API 压测脚本": "scripts/benchmark_api.py",
     "API 压测脚本测试": "tests/test_benchmark_api.py",
@@ -51,7 +51,7 @@ LOCAL_DATA_FILES = {
 }
 
 
-def build_offline_eval_report(rows: list[dict[str, Any]], *, title: str = "AI-IM-Guard-ML 离线评测报告") -> str:
+def build_offline_eval_report(rows: list[dict[str, Any]], *, title: str = "AutoCare-Guard-ML 离线评测报告") -> str:
     pairs = [row for row in rows if "label" in row and "prediction" in row]
     gold = [row["label"] for row in pairs]
     pred = [row["prediction"] for row in pairs]
@@ -148,7 +148,7 @@ def _fmt(value: Any) -> str:
 def build_delivery_summary(project_root: str | Path = ".") -> str:
     root = Path(project_root)
     lines = [
-        "# AI-IM-Guard-ML 企业级生产化交付摘要",
+        "# AutoCare-Guard-ML 企业级生产化交付摘要",
         "",
         f"- 生成时间：{datetime.now(UTC).isoformat()}",
         "",
@@ -175,7 +175,7 @@ def build_delivery_summary(project_root: str | Path = ".") -> str:
             "",
             "## 仍需真实生产平台补齐",
             "",
-            "- 真实 IM 私聊、人审、申诉和客诉样本。",
+            "- 真实售后工单、安全复核与回流样本。",
             "- 生产网关、密钥轮换、集中权限和租户隔离。",
             "- PostgreSQL/日志平台集中审计、归档和合规留存。",
             "- 模型注册、审批、线上 A/B 平台和真实 K8s 灰度发布。",
@@ -226,7 +226,7 @@ def build_readiness_check(project_root: str | Path = ".") -> dict[str, Any]:
         )
 
     remaining_external_requirements = [
-        "真实 IM 私聊、人审、申诉和客诉样本仍需来自业务闭环。",
+        "真实售后工单、安全复核与回流样本仍需来自业务闭环。",
         "生产网关、密钥轮换、集中权限和租户隔离需接入企业基础设施。",
         "集中审计存储、归档、合规留存和日志平台需在生产环境落地。",
         "模型注册、审批、线上 A/B 平台和真实 K8s 灰度发布需外部平台配合。",

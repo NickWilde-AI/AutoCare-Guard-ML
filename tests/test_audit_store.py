@@ -1,4 +1,4 @@
-from im_guard_ml.audit_store import JsonlAuditStore, SQLiteAuditStore, create_audit_store
+from autocare_guard_ml.audit_store import JsonlAuditStore, SQLiteAuditStore, create_audit_store
 
 
 def test_jsonl_audit_store_appends_and_finds_by_ticket(tmp_path):

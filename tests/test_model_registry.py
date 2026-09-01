@@ -2,8 +2,8 @@ import json
 
 import yaml
 
-from im_guard_ml.cli import main
-from im_guard_ml.model_registry import build_model_registry_report
+from autocare_guard_ml.cli import main
+from autocare_guard_ml.model_registry import build_model_registry_report
 
 
 def _registry():

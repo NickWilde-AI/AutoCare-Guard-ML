@@ -1,6 +1,6 @@
 import hashlib
 
-from im_guard_ml.auth import parse_auth_config
+from autocare_guard_ml.auth import parse_auth_config
 
 
 def test_parse_auth_config_keeps_legacy_token_as_admin():

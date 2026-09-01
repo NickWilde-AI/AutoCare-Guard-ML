@@ -18,8 +18,8 @@ def build_openapi_contract(config_path: str = "configs/default.yaml") -> dict[st
 
     app = create_app(config_path)
     schema = app.openapi()
-    schema["x-im-guard-required-endpoints"] = sorted(REQUIRED_ENDPOINTS)
-    schema["x-im-guard-contract-status"] = validate_openapi_contract(schema)
+    schema["x-autocare-guard-required-endpoints"] = sorted(REQUIRED_ENDPOINTS)
+    schema["x-autocare-guard-contract-status"] = validate_openapi_contract(schema)
     return schema
 
 

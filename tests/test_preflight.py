@@ -1,16 +1,16 @@
 import json
 
-from im_guard_ml.cli import main
-from im_guard_ml.preflight import build_production_preflight
+from autocare_guard_ml.cli import main
+from autocare_guard_ml.preflight import build_production_preflight
 
 
 SAFE_ENV = {
-    "IM_GUARD_API_TOKEN_HASHES": "a" * 64 + ":admin",
-    "IM_GUARD_CORS_ORIGINS": "https://audit.example.com",
-    "IM_GUARD_AUDIT_BACKEND": "sqlite",
-    "IM_GUARD_AUDIT_LOG_PATH": "outputs/api_audit_events.sqlite",
-    "IM_GUARD_MAX_REQUEST_BYTES": "262144",
-    "IM_GUARD_RATE_LIMIT_PER_MINUTE": "120",
+    "AUTOCARE_GUARD_API_TOKEN_HASHES": "a" * 64 + ":admin",
+    "AUTOCARE_GUARD_CORS_ORIGINS": "https://audit.example.com",
+    "AUTOCARE_GUARD_AUDIT_BACKEND": "sqlite",
+    "AUTOCARE_GUARD_AUDIT_LOG_PATH": "outputs/api_audit_events.sqlite",
+    "AUTOCARE_GUARD_MAX_REQUEST_BYTES": "262144",
+    "AUTOCARE_GUARD_RATE_LIMIT_PER_MINUTE": "120",
 }
 
 
@@ -30,11 +30,11 @@ def test_production_preflight_passes_for_restricted_safe_env():
 def test_production_preflight_fails_for_unsafe_public_env():
     report = build_production_preflight(
         environ={
-            "IM_GUARD_CORS_ORIGINS": "*",
-            "IM_GUARD_AUDIT_BACKEND": "jsonl",
-            "IM_GUARD_AUDIT_LOG_PATH": "",
-            "IM_GUARD_MAX_REQUEST_BYTES": "0",
-            "IM_GUARD_RATE_LIMIT_PER_MINUTE": "0",
+            "AUTOCARE_GUARD_CORS_ORIGINS": "*",
+            "AUTOCARE_GUARD_AUDIT_BACKEND": "jsonl",
+            "AUTOCARE_GUARD_AUDIT_LOG_PATH": "",
+            "AUTOCARE_GUARD_MAX_REQUEST_BYTES": "0",
+            "AUTOCARE_GUARD_RATE_LIMIT_PER_MINUTE": "0",
         }
     )
 
@@ -46,7 +46,7 @@ def test_production_preflight_fails_for_unsafe_public_env():
 
 
 def test_production_preflight_warns_for_placeholder_hash():
-    env = {**SAFE_ENV, "IM_GUARD_API_TOKEN_HASHES": "0" * 64 + ":admin"}
+    env = {**SAFE_ENV, "AUTOCARE_GUARD_API_TOKEN_HASHES": "0" * 64 + ":admin"}
 
     report = build_production_preflight(environ=env)
 

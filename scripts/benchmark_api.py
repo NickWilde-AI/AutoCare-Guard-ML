@@ -28,11 +28,25 @@ def post_json(url: str, payload: dict, token: str = "", *, timeout: float = 30.0
     return status, (time.perf_counter() - t0) * 1000
 
 
-def build_payload(ticket_id: str) -> dict:
+def build_payload(case_id: str) -> dict:
     return {
-        "ticket_id": ticket_id,
-        "chat_evidence_list": ["加微信稳赚，带你投资。"],
-        "behavior_abnormal_list": ["短时间高频私聊。"],
+        "case_id": case_id,
+        "service_context": {"channel": "app", "urgency": "high"},
+        "vehicle_context": {"model": "AutoCare EV-Pro", "mileage_km": 28600},
+        "conversation_evidence": [
+            {
+                "role": "customer",
+                "original_content": "充电时闻到焦糊味，仪表跳了电池相关告警。",
+            }
+        ],
+        "vehicle_signal_summary": {
+            "alerts": ["battery_thermal_warning"],
+            "battery_temp_c": 52.3,
+        },
+        "fault_evidence": [
+            {"fault_code": "BMS_THERMAL_WARN", "description": "动力电池热管理告警"}
+        ],
+        "service_history_summary": {"recent_visit_count_30d": 0, "warranty_status": "in_warranty"},
     }
 
 
@@ -107,7 +121,7 @@ def run_benchmark(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Benchmark for the IM Guard API /judge endpoint. Supports sequential and concurrent modes.")
+    parser = argparse.ArgumentParser(description="Benchmark for the AutoCare Guard API /judge endpoint. Supports sequential and concurrent modes.")
     parser.add_argument("--url", default="http://127.0.0.1:8000/judge")
     parser.add_argument("--requests", type=int, default=50)
     parser.add_argument("--concurrency", type=int, default=1, help="Number of concurrent workers (default: 1 = sequential)")

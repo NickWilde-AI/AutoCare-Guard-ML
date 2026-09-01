@@ -36,13 +36,13 @@ LC_CTYPE="C"
 而项目路径里包含中文字符，例如：
 
 ```text
-.../文稿/.../AI-IM-Guard-ML
+.../文稿/.../AutoCare-Guard-ML
 ```
 
 项目已经以 editable install 的方式安装到 `.venv`，这个绝对路径被写入了：
 
 ```text
-.venv/lib/python3.11/site-packages/__editable__.ai_im_guard_ml-0.1.0.pth
+.venv/lib/python3.11/site-packages/__editable__.ai_autocare_guard_ml-0.1.0.pth
 ```
 
 Python 启动时会由 `site` 模块读取 `.pth` 文件。由于 `LC_ALL=C`，Python 会按 ASCII 解码路径；当它遇到路径里的中文字符字节时，就会触发 `UnicodeDecodeError`。因此错误发生在 Python 启动阶段，而不是项目代码、CLI 或测试逻辑本身。
@@ -67,7 +67,7 @@ LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 make compile
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 make summary
 ```
 
-实际输出如下：
+成功后摘要输出形态示意如下（主题与标签随本地样例变化）：
 
 ```json
 {
@@ -76,13 +76,13 @@ LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 make summary
     "demo": 3
   },
   "by_topic": {
-    "无主题": 1,
-    "代刷/包榜": 1,
-    "诈骗引流": 1
+    "无风险事件": 1,
+    "充电与高压系统异常": 1,
+    "动力电池与热安全": 1
   },
   "by_label": {
-    "not_exist_violation": 1,
-    "exist_violation": 2
+    "not_risk_event": 1,
+    "risk_event": 2
   }
 }
 ```

@@ -1,6 +1,6 @@
 """Tests for training module (field-level loss masking, AutoCare)."""
 
-from im_guard_ml.training import _normalize_public_binary_labels, tokenize_training_case
+from autocare_guard_ml.training import _normalize_public_binary_labels, tokenize_training_case
 
 
 class TestNormalizePublicBinaryLabels:

@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ai-im-guard-ml"
+name = "autocare-guard-ml"
 version = "0.1.0"
-description = "AutoCare：新能源汽车售后风险智能研判与工单路由的多证据 LLM Judge 工程框架（包名 im_guard_ml 保留历史命名）。"
+description = "AutoCare：新能源汽车售后风险智能研判与工单路由的多证据 LLM Judge 工程框架。"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Chen Peng" }]
@@ -31,7 +31,7 @@ dev = [
 ]
 
 [project.scripts]
-im-guard = "im_guard_ml.cli:main"
+autocare-guard = "autocare_guard_ml.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -2,7 +2,7 @@
 
 import pytest
 
-from im_guard_ml.evaluation import (
+from autocare_guard_ml.evaluation import (
     auprc,
     eval_binary,
     eval_multi_field,

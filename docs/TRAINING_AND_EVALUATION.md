@@ -1,6 +1,6 @@
 # 训练与评测流程
 
-本文档把数据构建、训练、离线评测、报告生成和上线前检查串成一条可复现流程。当前仓库支持生产化展示级流程；真实生产训练仍需要内部 IM 私聊、人审、申诉和线上回流样本。
+本文档把数据构建、训练、离线评测、报告生成和上线前检查串成一条可复现流程。当前仓库支持生产化展示级流程；真实生产训练仍需要内部售后服务事件、人审、申诉和线上回流样本。
 
 ## 1. 流程总览
 
@@ -18,17 +18,17 @@
 
 核心原则：
 
-- 公开二分类安全数据只作为安全识别底座，不训练 `limit_account` 或 `ban_account`。
+- 公开二分类安全数据只作为安全识别底座，不训练 `expert_review` 或 `emergency_review`。
 - 强处置标签必须来自真实业务标注或人工审核过的内部样本。
 - 训练集、验证集、测试集必须先去重再拆分，避免 payload 泄漏。
-- 离线指标不能只看 accuracy，必须看 macro-F1、ban FPR、解析失败率和人审改判。
+- 离线指标不能只看 accuracy，必须看 macro-F1、`emergency_review` FPR、解析失败率和人审改判。
 
 ## 2. 数据来源与 task_type
 
 | 来源 | `task_type` | 作用 | 处置标签策略 |
 | --- | --- | --- | --- |
-| 内部历史工单 | `internal` | 主体业务分布和真实处置边界 | 可训练完整三层标签 |
-| 公开安全数据 | `public_binary` | 补安全识别和泛化 | 违规样本统一 `mid_risk / warning` |
+| 内部历史服务事件 | `internal` | 主体业务分布和真实处置边界 | 可训练完整三层标签 |
+| 公开安全数据 | `public_binary` | 补安全识别和泛化 | 风险样本统一 `mid_risk / service_followup` |
 | 合成样本 | `synthetic` | 补长尾主题和边界案例 | 需要规则审计或人工抽检 |
 | hard case | `hard_case` | 回灌误判、灰区和事故样本 | 需要 committee 或人审确认 |
 
@@ -51,7 +51,7 @@ make build-xguard
 等价命令：
 
 ```bash
-PYTHONPATH=src python3 -m im_guard_ml.build_dataset \
+PYTHONPATH=src python3 -m autocare_guard_ml.build_dataset \
   --public-xguard data/external/xguard_train_open_200k.jsonl \
   --out data/train/xguard_public_train.jsonl \
   --split-out-dir data/train/xguard_splits
@@ -71,18 +71,18 @@ PYTHONPATH=src python3 -m im_guard_ml.build_dataset \
 示例：
 
 ```bash
-PYTHONPATH=src python3 -m im_guard_ml.build_dataset \
-  --internal data/raw/history_tickets.jsonl \
+PYTHONPATH=src python3 -m autocare_guard_ml.build_dataset \
+  --internal data/raw/history_cases.jsonl \
   --internal data/raw/synthetic_cases.jsonl \
   --internal data/raw/refinement_cases.jsonl \
   --public-xguard data/external/xguard_train_open_200k.jsonl \
-  --out data/train/im_audit_train.jsonl \
-  --split-out-dir data/train/im_audit_splits
+  --out data/train/autocare_train.jsonl \
+  --split-out-dir data/train/autocare_splits
 ```
 
 构建逻辑：
 
-- 多源数据统一成 `audit_scene / chat_evidence_list / behavior_abnormal_list / label`。
+- 多源数据统一成 AutoCare `ServiceCase` 形状（`conversation_evidence` / `vehicle_signal_summary` / `fault_evidence` / `label` 等）。
 - 对训练 payload 做 hash 去重。
 - 对公开安全数据执行保守映射，避免污染强处置。
 - 默认拆分比例为 `train=0.8 / val=0.1 / test=0.1`，随机种子为 `42`。
@@ -98,8 +98,8 @@ make audit-xguard
 或：
 
 ```bash
-PYTHONPATH=src python3 -m im_guard_ml.cli --config configs/default.yaml \
-  audit-data data/train/im_audit_train.jsonl \
+PYTHONPATH=src python3 -m autocare_guard_ml.cli --config configs/default.yaml \
+  audit-data data/train/autocare_train.jsonl \
   --eval-jsonl data/eval/internal_test.jsonl
 ```
 
@@ -108,7 +108,7 @@ PYTHONPATH=src python3 -m im_guard_ml.cli --config configs/default.yaml \
 - 必填字段缺失
 - 标签枚举错误
 - 标签逻辑冲突
-- `ticket_id` 重复
+- `case_id` 重复
 - payload 重复
 - 训练/评测泄漏
 - 公开数据强处置污染
@@ -119,7 +119,7 @@ PYTHONPATH=src python3 -m im_guard_ml.cli --config configs/default.yaml \
 | 检查 | 红线 |
 | --- | ---: |
 | 标签非法 | `0` |
-| 公开数据产生 `limit_account / ban_account` | `0` |
+| 公开数据产生 `expert_review / emergency_review` | `0` |
 | 训练/评测 ID 泄漏 | `0` |
 | 训练/评测 payload 泄漏 | `0` |
 | 高风险 PII 未处理 | 必须脱敏或移除 |
@@ -142,7 +142,7 @@ make train-readiness
 
 ```bash
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-im-guard --config configs/default.yaml train-readiness \
+autocare-guard --config configs/default.yaml train-readiness \
   data/train/xguard_splits/train.jsonl \
   --out outputs/training_readiness.json
 ```
@@ -150,7 +150,7 @@ im-guard --config configs/default.yaml train-readiness \
 `train-readiness` 会检查：
 
 - 训练 JSONL 是否存在、是否有样本。
-- `public_binary` 是否产生了 `limit_account / ban_account` 强处置污染。
+- `public_binary` 是否产生了强处置污染。
 - `torch / transformers / datasets / trl / peft` 等训练依赖是否安装。
 - 当前环境是否有 CUDA/MPS/CPU，以及默认模型是否适合当前硬件。
 
@@ -158,10 +158,10 @@ im-guard --config configs/default.yaml train-readiness \
 
 ```bash
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-im-guard --config configs/default.yaml train data/train/xguard_splits/train.jsonl
+autocare-guard --config configs/default.yaml train data/train/xguard_splits/train.jsonl
 ```
 
-训练入口：[src/im_guard_ml/training.py](../src/im_guard_ml/training.py)
+训练入口：[src/autocare_guard_ml/training.py](../src/autocare_guard_ml/training.py)
 
 关键设置：
 
@@ -176,7 +176,7 @@ im-guard --config configs/default.yaml train data/train/xguard_splits/train.json
 
 ```bash
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-PYTHONPATH=src im-guard --config configs/local_mps_train.yaml \
+PYTHONPATH=src autocare-guard --config configs/local_mps_train.yaml \
   train data/train/xguard_splits/train.jsonl
 ```
 
@@ -186,11 +186,11 @@ PYTHONPATH=src im-guard --config configs/local_mps_train.yaml \
 
 ```bash
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 \
-PYTHONPATH=src im-guard --config configs/local_fast_full_train.yaml \
+PYTHONPATH=src autocare-guard --config configs/local_fast_full_train.yaml \
   train data/train/xguard_splits/train.jsonl
 ```
 
-该配置使用 `sshleifer/tiny-gpt2` 跑完整训练集，目标是证明数据、tokenize、completion mask、TRL Trainer 和 checkpoint 保存链路可执行。它不是中文 IM 风控质量模型，不能用来宣称识别精度。
+该配置使用 `sshleifer/tiny-gpt2` 跑完整训练集，目标是证明数据、tokenize、completion mask、TRL Trainer 和 checkpoint 保存链路可执行。它不是售后车辆风险研判质量模型，不能用来宣称识别精度。
 
 LoRA 示例（与 `configs/default.yaml` 定稿口径一致）：
 
@@ -216,9 +216,9 @@ make predict-route
 使用 checkpoint：
 
 ```bash
-PYTHONPATH=src im-guard --config configs/default.yaml predict \
-  data/train/im_audit_splits/test.jsonl \
-  --model-path outputs/im-audit-judge \
+PYTHONPATH=src autocare-guard --config configs/default.yaml predict \
+  data/train/autocare_splits/test.jsonl \
+  --model-path outputs/autocare-risk-judge \
   --with-route \
   --with-version \
   --audit-log-out outputs/test_audit_logs.jsonl \
@@ -229,8 +229,8 @@ PYTHONPATH=src im-guard --config configs/default.yaml predict \
 
 ```bash
 export QWEN_API_KEY="replace-with-api-key"
-PYTHONPATH=src im-guard --config configs/default.yaml predict \
-  data/train/im_audit_splits/test.jsonl \
+PYTHONPATH=src autocare-guard --config configs/default.yaml predict \
+  data/train/autocare_splits/test.jsonl \
   --api \
   --api-model qwen-plus \
   --with-route \
@@ -243,13 +243,13 @@ PYTHONPATH=src im-guard --config configs/default.yaml predict \
 评测：
 
 ```bash
-PYTHONPATH=src im-guard --config configs/default.yaml eval outputs/test_predictions.jsonl
+PYTHONPATH=src autocare-guard --config configs/default.yaml eval outputs/test_predictions.jsonl
 ```
 
 生成 Markdown 报告：
 
 ```bash
-PYTHONPATH=src im-guard --config configs/default.yaml eval-report \
+PYTHONPATH=src autocare-guard --config configs/default.yaml eval-report \
   outputs/test_predictions.jsonl \
   --out outputs/offline_eval_report.md
 ```
@@ -258,9 +258,9 @@ PYTHONPATH=src im-guard --config configs/default.yaml eval-report \
 
 | 维度 | 指标 |
 | --- | --- |
-| 二分类违规判断 | accuracy、precision、recall、F1、FPR、AUPRC |
+| 事件研判 | accuracy、precision、recall、F1、FPR、AUPRC |
 | 风险等级 | macro-F1、per-topic accuracy |
-| 处置建议 | macro-F1、ban FPR、human review 改判率 |
+| 动作建议 | macro-F1、`emergency_review` FPR、human review 改判率 |
 | 生成质量 | JSON 解析失败率、fallback 率 |
 | 数据稳定性 | PSI、drift report、窗口异常 |
 
@@ -269,7 +269,7 @@ PYTHONPATH=src im-guard --config configs/default.yaml eval-report \
 滑动窗口异常：
 
 ```bash
-PYTHONPATH=src im-guard --config configs/default.yaml window-alerts \
+PYTHONPATH=src autocare-guard --config configs/default.yaml window-alerts \
   outputs/test_predictions.jsonl \
   --window-size 100 \
   --step-size 50
@@ -278,7 +278,7 @@ PYTHONPATH=src im-guard --config configs/default.yaml window-alerts \
 drift 检测：
 
 ```bash
-PYTHONPATH=src im-guard --config configs/default.yaml drift-report \
+PYTHONPATH=src autocare-guard --config configs/default.yaml drift-report \
   outputs/test_predictions.jsonl \
   --baseline-pred-jsonl outputs/baseline_predictions.jsonl \
   --out outputs/drift_report.json
@@ -286,7 +286,7 @@ PYTHONPATH=src im-guard --config configs/default.yaml drift-report \
 
 说明：
 
-- `window-alerts` 用于发现局部时间段或批次内的处置比例异常。
+- `window-alerts` 用于发现局部时间段或批次内的动作比例异常。
 - `drift-report` 用于比较当前结果和历史 baseline 的整体分布变化。
 - 两者都不能替代线上 Prometheus 和日志平台，但适合回放验收。
 
@@ -294,24 +294,24 @@ PYTHONPATH=src im-guard --config configs/default.yaml drift-report \
 
 ```bash
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 make enterprise-check
-PYTHONPATH=src im-guard readiness-check --project-root . --out outputs/readiness_check.json
+PYTHONPATH=src autocare-guard readiness-check --project-root . --out outputs/readiness_check.json
 ```
 
 上线红线：
 
-- `ban_account FPR <= 3%`。
+- `emergency_review_fpr` 不超过 `configs/rollout.yaml` 中的 `emergency_review_fpr_max`（当前示例为 `0.03`）。
 - JSON 解析异常率低于 SLO。
-- `ban_account` 占比没有异常尖峰。
+- `emergency_review_rate` 没有异常尖峰（告警阈值见 `configs/default.yaml`）。
 - 公开数据没有强处置污染。
 - 训练/评测没有 ID 或 payload 泄漏。
 - 模型、prompt、rubric、feature schema、postprocess 版本都可追踪。
-- `ban_account` 默认进入人审或策略复核，不直接自动执行。
+- `emergency_review` 默认进入人审或策略复核，不直接自动执行；模型不直接控车。
 
 ## 11. 真实生产缺口
 
 当前仓库已经能展示完整训练评测工程链路，但真实企业上线仍需要：
 
-- 真实 IM 私聊、人审、申诉和客诉数据。
+- 真实售后服务事件、人审、申诉和客诉数据。
 - 固定业务 eval set 和线上回流机制。
 - 模型注册、审批和实验追踪平台。
 - 多实例服务压测、网关限流和集中审计。

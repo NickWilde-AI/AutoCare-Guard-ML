@@ -3,23 +3,23 @@ import json
 
 from fastapi.testclient import TestClient
 
-from im_guard_ml.api import create_app
+from autocare_guard_ml.api import create_app
 
 
 def test_api_without_token_keeps_demo_access(monkeypatch, tmp_path):
-    monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKEN", raising=False)
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     client = TestClient(create_app())
 
-    response = client.post("/judge", json={"ticket_id": "demo-1", "chat_evidence_list": ["正常聊天"]})
+    response = client.post("/judge", json={"ticket_id": "demo-1", "chat_evidence_list": ["想问一下下次保养大概什么时候？"]})
 
     assert response.status_code == 200
     assert "request_id" in response.json()
 
 
 def test_api_with_token_requires_bearer(monkeypatch, tmp_path):
-    monkeypatch.setenv("IM_GUARD_API_TOKEN", "secret")
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setenv("AUTOCARE_GUARD_API_TOKEN", "secret")
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     client = TestClient(create_app())
 
     assert client.post("/judge", json={"ticket_id": "demo-2"}).status_code == 401
@@ -32,9 +32,9 @@ def test_api_with_token_requires_bearer(monkeypatch, tmp_path):
 
 
 def test_api_role_tokens_enforce_minimal_permissions(monkeypatch, tmp_path):
-    monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
-    monkeypatch.setenv("IM_GUARD_API_TOKENS", "writer-token:writer,reader-token:reader,audit-token:auditor")
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKEN", raising=False)
+    monkeypatch.setenv("AUTOCARE_GUARD_API_TOKENS", "writer-token:writer,reader-token:reader,audit-token:auditor")
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     client = TestClient(create_app())
 
     assert client.post(
@@ -49,10 +49,10 @@ def test_api_role_tokens_enforce_minimal_permissions(monkeypatch, tmp_path):
 
 def test_api_accepts_hashed_role_tokens(monkeypatch, tmp_path):
     token_hash = hashlib.sha256("hashed-writer-token".encode("utf-8")).hexdigest()
-    monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
-    monkeypatch.delenv("IM_GUARD_API_TOKENS", raising=False)
-    monkeypatch.setenv("IM_GUARD_API_TOKEN_HASHES", f"{token_hash}:writer")
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKEN", raising=False)
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKENS", raising=False)
+    monkeypatch.setenv("AUTOCARE_GUARD_API_TOKEN_HASHES", f"{token_hash}:writer")
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     client = TestClient(create_app())
 
     denied = client.post(
@@ -74,8 +74,8 @@ def test_api_accepts_hashed_role_tokens(monkeypatch, tmp_path):
 
 def test_api_token_success_returns_request_id_and_writes_audit(monkeypatch, tmp_path):
     audit_path = tmp_path / "audit.jsonl"
-    monkeypatch.setenv("IM_GUARD_API_TOKEN", "secret")
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(audit_path))
+    monkeypatch.setenv("AUTOCARE_GUARD_API_TOKEN", "secret")
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(audit_path))
     client = TestClient(create_app())
 
     response = client.post(
@@ -83,8 +83,8 @@ def test_api_token_success_returns_request_id_and_writes_audit(monkeypatch, tmp_
         headers={"Authorization": "Bearer secret", "X-Request-ID": "req-123"},
         json={
             "ticket_id": "demo-3",
-            "chat_evidence_list": ["加微信稳赚，带你投资。"],
-            "behavior_abnormal_list": ["短时间高频私聊。"],
+            "chat_evidence_list": ["充电时闻到焦糊味，仪表跳了电池相关告警。"],
+            "behavior_abnormal_list": ["动力电池热管理告警，温度偏高。"],
         },
     )
 
@@ -101,15 +101,15 @@ def test_api_token_success_returns_request_id_and_writes_audit(monkeypatch, tmp_
 
 def test_api_sqlite_audit_backend_writes_and_queries(monkeypatch, tmp_path):
     audit_path = tmp_path / "audit.sqlite"
-    monkeypatch.setenv("IM_GUARD_API_TOKEN", "secret")
-    monkeypatch.setenv("IM_GUARD_AUDIT_BACKEND", "sqlite")
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(audit_path))
+    monkeypatch.setenv("AUTOCARE_GUARD_API_TOKEN", "secret")
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_BACKEND", "sqlite")
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(audit_path))
     client = TestClient(create_app())
 
     response = client.post(
         "/judge",
         headers={"Authorization": "Bearer secret", "X-Request-ID": "sqlite-req"},
-        json={"ticket_id": "sqlite-ticket", "chat_evidence_list": ["加微信稳赚。"]},
+        json={"ticket_id": "sqlite-ticket", "chat_evidence_list": ["刹车时有明显异响。"]},
     )
     lookup = client.get("/audit/tickets/sqlite-ticket", headers={"Authorization": "Bearer secret"})
 
@@ -121,10 +121,10 @@ def test_api_sqlite_audit_backend_writes_and_queries(monkeypatch, tmp_path):
 
 
 def test_ready_reports_production_guard_config(monkeypatch, tmp_path):
-    monkeypatch.setenv("IM_GUARD_API_TOKEN", "secret")
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
-    monkeypatch.setenv("IM_GUARD_MAX_REQUEST_BYTES", "1234")
-    monkeypatch.setenv("IM_GUARD_RATE_LIMIT_PER_MINUTE", "77")
+    monkeypatch.setenv("AUTOCARE_GUARD_API_TOKEN", "secret")
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setenv("AUTOCARE_GUARD_MAX_REQUEST_BYTES", "1234")
+    monkeypatch.setenv("AUTOCARE_GUARD_RATE_LIMIT_PER_MINUTE", "77")
     client = TestClient(create_app())
 
     response = client.get("/ready")
@@ -139,9 +139,9 @@ def test_ready_reports_production_guard_config(monkeypatch, tmp_path):
 
 
 def test_request_size_limit_returns_structured_error(monkeypatch, tmp_path):
-    monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
-    monkeypatch.setenv("IM_GUARD_MAX_REQUEST_BYTES", "10")
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKEN", raising=False)
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setenv("AUTOCARE_GUARD_MAX_REQUEST_BYTES", "10")
     client = TestClient(create_app())
 
     response = client.post("/judge", json={"ticket_id": "too-large"})
@@ -152,9 +152,9 @@ def test_request_size_limit_returns_structured_error(monkeypatch, tmp_path):
 
 
 def test_rate_limit_returns_structured_error(monkeypatch, tmp_path):
-    monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
-    monkeypatch.setenv("IM_GUARD_RATE_LIMIT_PER_MINUTE", "1")
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKEN", raising=False)
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.setenv("AUTOCARE_GUARD_RATE_LIMIT_PER_MINUTE", "1")
     client = TestClient(create_app())
 
     payload = {"ticket_id": "rate-limit-test", "chat_evidence_list": ["synthetic test"]}
@@ -167,14 +167,14 @@ def test_rate_limit_returns_structured_error(monkeypatch, tmp_path):
 
 def test_audit_ticket_lookup_requires_auth_and_returns_events(monkeypatch, tmp_path):
     audit_path = tmp_path / "audit.jsonl"
-    monkeypatch.setenv("IM_GUARD_API_TOKEN", "secret")
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(audit_path))
+    monkeypatch.setenv("AUTOCARE_GUARD_API_TOKEN", "secret")
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(audit_path))
     client = TestClient(create_app())
 
     client.post(
         "/judge",
         headers={"Authorization": "Bearer secret"},
-        json={"ticket_id": "audit-ticket-1", "chat_evidence_list": ["加微信稳赚。"]},
+        json={"ticket_id": "audit-ticket-1", "chat_evidence_list": ["车辆无法启动，仪表只有供电没有 Ready。"]},
     )
 
     unauthorized = client.get("/audit/tickets/audit-ticket-1")
@@ -187,24 +187,24 @@ def test_audit_ticket_lookup_requires_auth_and_returns_events(monkeypatch, tmp_p
 
 
 def test_metrics_include_topic_risk_handling_and_route_labels(monkeypatch, tmp_path):
-    monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKEN", raising=False)
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     client = TestClient(create_app())
-    client.post("/judge", json={"ticket_id": "metric-1", "chat_evidence_list": ["加微信稳赚。"]})
+    client.post("/judge", json={"ticket_id": "metric-1", "chat_evidence_list": ["高速领航老是误刹，吓得我赶紧接管。"]})
 
     response = client.get("/metrics")
     text = response.text
 
     assert response.status_code == 200
-    assert "im_guard_requests_by_risk_total" in text
-    assert "im_guard_requests_by_topic_total" in text
-    assert "im_guard_requests_by_handling_total" in text
-    assert "im_guard_requests_by_route_total" in text
+    assert "autocare_guard_requests_by_risk_total" in text
+    assert "autocare_guard_requests_by_topic_total" in text
+    assert "autocare_guard_requests_by_handling_total" in text
+    assert "autocare_guard_requests_by_route_total" in text
 
 
 def test_config_endpoint_returns_full_introspection(monkeypatch, tmp_path):
-    monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKEN", raising=False)
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     client = TestClient(create_app())
 
     response = client.get("/config")

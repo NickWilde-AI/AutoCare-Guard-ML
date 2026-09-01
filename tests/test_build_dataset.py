@@ -1,4 +1,4 @@
-from im_guard_ml.build_dataset import dedupe_rows, normalize_xguard, split_rows, xguard_content
+from autocare_guard_ml.build_dataset import dedupe_rows, normalize_xguard, split_rows, xguard_content
 
 
 def test_xguard_safe_maps_to_safe_default():

@@ -1,13 +1,13 @@
 """Public benchmark evaluation for cross-domain capability monitoring.
 
 Evaluates the fine-tuned Judge on three public benchmarks to verify that
-IM-specific training does not degrade general text moderation capability:
+domain fine-tuning does not degrade general text moderation capability:
 
   1. ToxicChat (~2.85K): Real user-model interactions, response binary classification
   2. HarmBench (~0.4K): Adversarial prompts, verifies resistance to jailbreak
   3. XSTest (~0.45K): Safe-looking-but-actually-safe, monitors false positive rate
 
-These public benchmarks complement user-provided IM-specific evaluation data.
+These public benchmarks complement user-provided AutoCare evaluation data.
 
 口径声明（P2-55）：Judge 输出不含 violation 概率，AUPRC 使用 risk_level
 （high=0.9 / mid=0.6 / low=0.1）作为概率代理计算——仅用于趋势监控，
@@ -217,7 +217,7 @@ def run_all_benchmarks(
 
 
 # ---------------------------------------------------------------------------
-# Internal evaluation (IM-specific test sets)
+# Internal evaluation (user-provided after-sales / service risk test sets)
 # ---------------------------------------------------------------------------
 
 
@@ -225,7 +225,7 @@ def evaluate_im_test_set(
     test_data: list[dict[str, Any]],
     predict_fn: Any,
 ) -> dict[str, Any]:
-    """Evaluate on a user-provided IM audit test set.
+    """Evaluate on a user-provided service-risk audit test set.
 
     Returns comprehensive metrics including:
       - final_judgment binary metrics

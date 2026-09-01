@@ -24,8 +24,7 @@ models/
 private/
 user_docs/
 *.bundle
-违规审核模型*.pdf
-违规审核模型*.md
+# Legacy local materials; keep out of the public snapshot.
 
 # Local career-planning materials; keep them out of the public snapshot.
 docs/*INTERVIEW*.md

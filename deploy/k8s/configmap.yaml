@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: im-guard-api-config
+  name: autocare-guard-api-config
 data:
-  IM_GUARD_CONFIG: configs/default.yaml
-  IM_GUARD_HOST: 0.0.0.0
-  IM_GUARD_PORT: "8000"
-  IM_GUARD_CORS_ORIGINS: https://audit.example.com
-  IM_GUARD_AUDIT_BACKEND: sqlite
-  IM_GUARD_AUDIT_LOG_PATH: outputs/api_audit_events.sqlite
-  IM_GUARD_MAX_REQUEST_BYTES: "262144"
-  IM_GUARD_RATE_LIMIT_PER_MINUTE: "120"
-  IM_GUARD_P95_LATENCY_BUDGET_MS: "1200"
-  IM_GUARD_BAN_FPR_REDLINE: "0.03"
+  AUTOCARE_GUARD_CONFIG: configs/default.yaml
+  AUTOCARE_GUARD_HOST: 0.0.0.0
+  AUTOCARE_GUARD_PORT: "8000"
+  AUTOCARE_GUARD_CORS_ORIGINS: https://audit.example.com
+  AUTOCARE_GUARD_AUDIT_BACKEND: sqlite
+  AUTOCARE_GUARD_AUDIT_LOG_PATH: outputs/api_audit_events.sqlite
+  AUTOCARE_GUARD_MAX_REQUEST_BYTES: "262144"
+  AUTOCARE_GUARD_RATE_LIMIT_PER_MINUTE: "120"
+  AUTOCARE_GUARD_P95_LATENCY_BUDGET_MS: "1200"
+  AUTOCARE_GUARD_BAN_FPR_REDLINE: "0.03"

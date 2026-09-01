@@ -2,38 +2,38 @@
 
 ## 总体结论
 
-当前项目提供风控审核系统的脱敏工程骨架：多证据输入、结构化输出、解析兜底、策略路由、评测、监控、告警、版本追踪、API 服务、部署模板、契约门禁、环境 preflight、模型注册表示例和单元测试。公开实现适合技术交流和方案评审，不代表完整生产系统。
+当前项目提供售后风险研判与工单路由系统的脱敏工程骨架：多证据输入、结构化输出、解析兜底、策略路由、评测、监控、告警、版本追踪、API 服务、部署模板、契约门禁、环境 preflight、模型注册表示例和单元测试。公开实现适合技术交流和方案评审，不代表完整生产系统。
 
-但它仍不是完整生产系统。真实上线还需要内部业务数据、人工复核闭环、多实例持久化、网关级限流、真实集群灰度、权限治理、集中审计和长期监控。
+真实上线还需要内部业务数据、人工复核闭环、多实例持久化、网关级限流、真实集群灰度、权限治理、集中审计和长期监控。
 
 ## 成熟度分级
 
 | 维度 | 当前状态 | 生产化展示评价 | 真实生产缺口 |
 | --- | --- | --- | --- |
-| 数据 | 示例数据 + XGuard 公开数据接入 | 已有冷启动公开安全底座 | 缺真实 IM 私聊、申诉和人审样本 |
+| 数据 | 示例数据 + XGuard 公开数据接入 | 已有冷启动公开安全底座 | 缺真实售后服务事件、申诉和人审样本 |
 | 训练 | SFT 入口、LoRA 配置、公开样本保守归一 | 能说明训练链路和标签防污染 | 缺真实训练/验证/测试拆分和线上回流 |
 | 测试 | 单元测试覆盖核心 schema、解析、后处理、评测、监控、API 安全、契约检查、生产 preflight、模型注册表和轻量压测脚本，GitHub Actions 自动运行 enterprise-check | 已补数据转换、API 集成测试、OpenAPI 契约门禁、压测脚本测试和远端质量门禁 | 缺真实多实例压测、网关压测和长时间 soak test |
 | API | FastAPI、可选鉴权、request_id、请求限制、基础限流、审计落盘、OpenAPI 契约门禁 | 具备 demo 到服务化的关键桥梁，并能防止核心接口漂移 | 缺生产网关、租户隔离和网关级限流 |
 | 安全 | Bearer Token、SHA-256 token hash、常量时间比较、最小角色权限、CORS 配置、公开数据不训练强处置、审计脱敏摘要 | 展示级安全边界明确，避免在生产化模板中直接保存明文 token | 缺企业密钥轮换、租户隔离和网关级 PII 策略 |
-| 审计 | CLI 审计日志 + API JSONL/SQLite 审计后端 | 可追踪版本和处置结果，支持按 ticket 查询 | 缺归档、合规留存和跨实例集中查询 |
-| 监控 | Prometheus 文本指标、延迟分位数、监控摘要、滑动窗口异常检测、drift 检测、SLO、告警规则 | 能展示核心风控指标意识 | 缺真实告警平台和实例维度聚合 |
+| 审计 | CLI 审计日志 + API JSONL/SQLite 审计后端 | 可追踪版本和研判结果，支持按 case/ticket 查询 | 缺归档、合规留存和跨实例集中查询 |
+| 监控 | Prometheus 文本指标、延迟分位数、监控摘要、滑动窗口异常检测、drift 检测、SLO、告警规则 | 能展示核心研判指标意识 | 缺真实告警平台和实例维度聚合 |
 | 部署 | vLLM 脚本、Dockerfile、Docker Compose、K8s 模板、env 示例、生产 preflight | 能讲清服务拆分和部署路径，并能机器检查关键生产配置 | 缺真实集群灰度发布自动化 |
 | 模型治理 | model/prompt/rubric/schema/postprocess 版本、模型注册表、指标红线、回滚目标、灰度/A/B 配置、人审治理文档 | 具备版本追溯和最小审批治理意识 | 缺真实企业模型注册平台和线上 A/B 平台 |
 
 ## 已增强项
 
 - 接入 `Alibaba-AAIG/XGuard-Train-Open-200K` 作为公开安全训练底座。
-- 新增 XGuard 到项目标签体系的保守映射，避免公开数据污染 `limit_account` 和 `ban_account`。
+- 新增 XGuard 到项目标签体系的保守映射，避免公开数据污染 `expert_review` 和 `emergency_review`。
 - 补齐 `dev` 和 `serve` 依赖中的 `pytest`、`httpx`。
 - API 支持可选 Bearer Token、可配置 CORS、`request_id` 和 API 审计 JSONL。
 - API 支持 `admin / writer / reader / auditor` 最小角色权限。
-- API 支持请求大小限制、基础限流、结构化错误、`/ready` 和按 `ticket_id` 查询审计事件。
+- API 支持请求大小限制、基础限流、结构化错误、`/ready` 和按 case/ticket 查询审计事件。
 - API 支持 OpenAPI 契约导出和关键接口缺失检查，纳入 `enterprise-check`。
 - 新增 API 使用说明，覆盖接口表、鉴权、错误码、审计查询和压测入口。
 - 新增 `make benchmark-api` 和 `scripts/benchmark_api.py` 压测门禁，支持结果落盘、非 2xx 失败和 P95 延迟阈值检查。
-- API 审计支持 `jsonl` 与 `sqlite` 两种后端，SQLite 后端建表并按 `ticket_id` 索引查询。
+- API 审计支持 `jsonl` 与 `sqlite` 两种后端，SQLite 后端建表并按主键索引查询。
 - 审计事件记录脱敏输入摘要、payload hash 和 PII 类型，不落完整原文证据。
-- Prometheus 指标增加风险等级、主题、处置建议和路由维度。
+- Prometheus 指标增加风险等级、主题、动作建议和路由维度。
 - Prometheus 指标增加延迟分位数，部署目录提供告警规则模板。
 - CLI 增加 `window-alerts`，支持对批量预测结果做滑动窗口异常检测。
 - CLI 增加 `drift-report`，支持相对历史 baseline 输出 PSI、卡方和 KS 漂移检测结果。
@@ -55,7 +55,7 @@
 
 ```bash
 LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 make enterprise-check
-PYTHONPATH=src python3 -m im_guard_ml.cli readiness-check --project-root . --out outputs/readiness_check.json
+PYTHONPATH=src python3 -m autocare_guard_ml.cli readiness-check --project-root . --out outputs/readiness_check.json
 make serve
 make benchmark-api
 ```
@@ -66,7 +66,7 @@ make benchmark-api
 
 ## 下一阶段建议
 
-1. 引入真实或人工审核过的 IM 私聊样本，建立固定 eval set。
+1. 引入真实或人工审核过的售后服务事件样本，建立固定 eval set。
 2. 将 SQLite 审计升级为 PostgreSQL 或日志平台集中查询。
 3. 增加生产网关、密钥轮换和集中权限系统。
 4. 将 K8s 模板接入真实集群灰度发布、网关压测、多实例压测和长时间 soak test。
@@ -74,4 +74,4 @@ make benchmark-api
 
 ## 对外表述
 
-可以把当前项目定位为：面向 IM 私聊风控审核的生产化展示项目。它已经证明完整工程链路、公开安全数据接入、保守处置策略和服务化治理能力；但真实企业上线仍需要业务私有数据、人审闭环和平台级部署治理。
+可以把当前项目定位为：面向新能源汽车售后风险智能研判与工单路由的生产化展示项目。它已经证明完整工程链路、公开安全数据接入、保守动作策略和服务化治理能力；但真实企业上线仍需要业务私有数据、人审闭环和平台级部署治理。

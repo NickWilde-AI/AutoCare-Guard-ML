@@ -8,7 +8,7 @@
 - 规模：200,000 条训练样本
 - 本地路径：`data/external/xguard_train_open_200k.jsonl`
 
-该数据集是中文 LLM safety guardrail 方向的公开训练数据，包含 `prompt`、`response`、`stage`、`label`、`explanation`、`policy` 等字段。它适合作为本项目的公开安全识别底座，但不等同于真实 IM 私聊风控数据。
+该数据集是中文 LLM safety guardrail 方向的公开训练数据，包含 `prompt`、`response`、`stage`、`label`、`explanation`、`policy` 等字段。它适合作为本项目的**公开安全识别底座**，**不等于真实售后车辆风险样本**。
 
 ## 下载
 
@@ -22,35 +22,33 @@ python3 scripts/download_xguard_dataset.py
 
 公开数据只用于训练文本安全识别能力，不训练强处置标签。
 
-| XGuard label | 本项目 topic |
+| XGuard label | 本项目 event_topic（弱映射演示） |
 | --- | --- |
-| `sec` | `无主题` |
-| `pc` | `色情诱导` |
-| `ec`, `fin` | `诈骗引流` |
-| `dc`, `dw`, `ter` | `违禁品交易` |
-| `ac`, `def`, `ti`, `cy` | `辱骂攻击` |
-| `mh` | `自伤诱导` |
-| `cm`, `ma`, `md` | `未成年保护` |
-| `pi` | `版权侵犯` |
-| `sd`, `ext` | `政治敏感` |
-| 其他风险类 | `虚假信息` |
+| `sec` | `无风险事件` |
+| `pc` / `ac` / `def` / `ti` / `cm` / `ma` / `md` / `pi` / `sd` / `ext` | `无风险事件` |
+| `ec` / `fin` | `质保、零部件与服务争议` |
+| `dc` / `dw` / `ter` / `mh` | `道路救援与人员安全` |
+| `cy` | `车机、座舱和远程控车故障` |
+| 其他风险类 | `质保、零部件与服务争议` |
 
 映射约束：
 
-- `sec` 转为 `not_exist_violation / low_risk / ignore / 无主题`。
-- 所有非 `sec` 样本转为 `exist_violation / mid_risk / warning`。
+- `sec` 转为 `not_risk_event / low_risk / information_reply / 无风险事件`。
+- 所有非 `sec` 样本转为 `risk_event / mid_risk / service_followup`。
 - 所有 XGuard 样本保留 `task_type=public_binary`。
-- 公开数据不得产生 `limit_account` 或 `ban_account`。
+- 公开数据不得产生 `expert_review` 或 `emergency_review`。
+
+说明：上述主题映射仅为冷启动弱映射，不宣称 XGuard 类别与真实车辆故障主题等价。
 
 ## 转换与审计
 
 ```bash
-PYTHONPATH=src python3 -m im_guard_ml.build_dataset \
+PYTHONPATH=src python3 -m autocare_guard_ml.build_dataset \
   --public-xguard data/external/xguard_train_open_200k.jsonl \
   --out data/train/xguard_public_train.jsonl \
   --split-out-dir data/train/xguard_splits
 
-PYTHONPATH=src python3 -m im_guard_ml.cli audit-data data/train/xguard_public_train.jsonl
+PYTHONPATH=src python3 -m autocare_guard_ml.cli audit-data data/train/xguard_public_train.jsonl
 ```
 
 转换过程会按项目训练载荷去重，保留首个样本，避免公开数据中的重复项污染训练和评测统计。
@@ -65,4 +63,4 @@ PYTHONPATH=src python3 -m im_guard_ml.cli audit-data data/train/xguard_public_tr
 
 ## 局限
 
-XGuard 覆盖通用内容安全、LLM 输入输出安全和动态策略场景，但缺少本项目最关键的真实 IM 行为证据，例如亲密度、礼物金额、进房、关注、搜索、登录异常和人工复核结果。因此它适合做公开安全底座，不应被包装成真实业务训练集。
+XGuard 覆盖通用内容安全、LLM 输入输出安全和动态策略场景，但缺少本项目最关键的真实售后车辆证据，例如车辆信号摘要、故障证据、服务历史和人工复核结果。因此它适合做公开安全底座，不应被包装成真实售后车辆风险训练集。

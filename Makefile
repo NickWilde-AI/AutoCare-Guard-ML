@@ -16,75 +16,75 @@ BENCHMARK_P95_MS ?= 1200
 .PHONY: summary predict predict-route eval monitor alerts window-alerts drift-report ab-report api-contract production-preflight model-registry-check audit-data build-demo download-xguard build-xguard audit-xguard train-readiness eval-report delivery-summary readiness-check benchmark-api benchmark-stress enterprise-check compile clean serve simulator demo test
 
 summary:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) summary $(INPUT)
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) summary $(INPUT)
 
 predict:
 	mkdir -p $(OUT_DIR)
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) predict $(INPUT) --out $(OUT_DIR)/demo_predictions.jsonl
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) predict $(INPUT) --out $(OUT_DIR)/demo_predictions.jsonl
 
 predict-route:
 	mkdir -p $(OUT_DIR)
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) predict $(INPUT) --with-route --with-version --audit-log-out $(OUT_DIR)/demo_audit_logs.jsonl --out $(OUT_DIR)/demo_routed_predictions.jsonl
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) predict $(INPUT) --with-route --with-version --audit-log-out $(OUT_DIR)/demo_audit_logs.jsonl --out $(OUT_DIR)/demo_routed_predictions.jsonl
 
 eval: predict
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) eval $(OUT_DIR)/demo_predictions.jsonl
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) eval $(OUT_DIR)/demo_predictions.jsonl
 
 monitor: predict-route
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) monitor $(OUT_DIR)/demo_routed_predictions.jsonl
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) monitor $(OUT_DIR)/demo_routed_predictions.jsonl
 
 alerts: predict-route
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) alerts $(OUT_DIR)/demo_routed_predictions.jsonl
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) alerts $(OUT_DIR)/demo_routed_predictions.jsonl
 
 window-alerts: predict-route
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) window-alerts $(OUT_DIR)/demo_routed_predictions.jsonl --window-size 20 --step-size 10
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) window-alerts $(OUT_DIR)/demo_routed_predictions.jsonl --window-size 20 --step-size 10
 
 drift-report: predict-route
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) drift-report $(OUT_DIR)/demo_routed_predictions.jsonl --baseline-pred-jsonl $(OUT_DIR)/demo_routed_predictions.jsonl --out $(OUT_DIR)/drift_report.json
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) drift-report $(OUT_DIR)/demo_routed_predictions.jsonl --baseline-pred-jsonl $(OUT_DIR)/demo_routed_predictions.jsonl --out $(OUT_DIR)/drift_report.json
 
 ab-report: predict-route
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config configs/rollout.yaml ab-report --control $(OUT_DIR)/demo_routed_predictions.jsonl --candidate $(OUT_DIR)/demo_routed_predictions.jsonl --out $(OUT_DIR)/ab_report.md --json-out $(OUT_DIR)/ab_report.json
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config configs/rollout.yaml ab-report --control $(OUT_DIR)/demo_routed_predictions.jsonl --candidate $(OUT_DIR)/demo_routed_predictions.jsonl --out $(OUT_DIR)/ab_report.md --json-out $(OUT_DIR)/ab_report.json
 
 api-contract:
 	mkdir -p $(OUT_DIR)
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) api-contract --out $(OUT_DIR)/openapi_contract.json --fail-on-missing
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) api-contract --out $(OUT_DIR)/openapi_contract.json --fail-on-missing
 
 production-preflight:
 	mkdir -p $(OUT_DIR)
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) production-preflight --env-file deploy/audit_service.prod.env.example --out $(OUT_DIR)/production_preflight.json
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) production-preflight --env-file deploy/audit_service.prod.env.example --out $(OUT_DIR)/production_preflight.json
 
 model-registry-check:
 	mkdir -p $(OUT_DIR)
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) model-registry-check --registry configs/model_registry.yaml --out $(OUT_DIR)/model_registry_check.json
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) model-registry-check --registry configs/model_registry.yaml --out $(OUT_DIR)/model_registry_check.json
 
 audit-data:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) audit-data $(INPUT)
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) audit-data $(INPUT)
 
 build-demo:
 	mkdir -p $(OUT_DIR)
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.build_dataset --internal $(INPUT) --out $(OUT_DIR)/built_train.jsonl
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.build_dataset --internal $(INPUT) --out $(OUT_DIR)/built_train.jsonl
 
 download-xguard:
 	PYTHONPATH=$(PYTHONPATH) $(PYTHON) scripts/download_xguard_dataset.py --out $(XGUARD_RAW)
 
 build-xguard:
 	mkdir -p data/train
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.build_dataset --public-xguard $(XGUARD_RAW) --out $(XGUARD_TRAIN) --split-out-dir $(XGUARD_SPLITS)
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.build_dataset --public-xguard $(XGUARD_RAW) --out $(XGUARD_TRAIN) --split-out-dir $(XGUARD_SPLITS)
 
 audit-xguard:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) audit-data $(XGUARD_TRAIN)
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) audit-data $(XGUARD_TRAIN)
 
 train-readiness:
 	mkdir -p $(OUT_DIR)
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) train-readiness $(XGUARD_SPLITS)/train.jsonl --out $(OUT_DIR)/training_readiness.json
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) train-readiness $(XGUARD_SPLITS)/train.jsonl --out $(OUT_DIR)/training_readiness.json
 
 eval-report: predict-route
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) eval-report $(OUT_DIR)/demo_routed_predictions.jsonl --out $(OUT_DIR)/offline_eval_report.md
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) eval-report $(OUT_DIR)/demo_routed_predictions.jsonl --out $(OUT_DIR)/offline_eval_report.md
 
 delivery-summary:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) delivery-summary --project-root . --out $(OUT_DIR)/enterprise_delivery_summary.md
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) delivery-summary --project-root . --out $(OUT_DIR)/enterprise_delivery_summary.md
 
 readiness-check:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) readiness-check --project-root . --out $(OUT_DIR)/readiness_check.json
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) readiness-check --project-root . --out $(OUT_DIR)/readiness_check.json
 
 benchmark-api:
 	mkdir -p $(OUT_DIR)
@@ -105,20 +105,20 @@ clean:
 # === 服务与演示 ===
 
 serve:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) serve --port $(PORT)
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) serve --port $(PORT)
 
 serve-api:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) serve --port $(PORT) --api --api-model $(API_MODEL)
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) serve --port $(PORT) --api --api-model $(API_MODEL)
 
 simulator:
-	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.simulator --port $(PORT) --interval $(SIM_INTERVAL)
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.simulator --port $(PORT) --interval $(SIM_INTERVAL)
 
 demo:
 	@echo "启动审核服务 (端口 $(PORT))..."
-	@PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.cli --config $(CONFIG) serve --port $(PORT) &
+	@PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.cli --config $(CONFIG) serve --port $(PORT) &
 	@sleep 2
 	@echo "启动数据模拟器 (间隔 $(SIM_INTERVAL)秒)..."
-	@PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m im_guard_ml.simulator --port $(PORT) --interval $(SIM_INTERVAL) &
+	@PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m autocare_guard_ml.simulator --port $(PORT) --interval $(SIM_INTERVAL) &
 	@sleep 1
 	@echo "打开监控大盘..."
 	@open static/Guard-ML.html
@@ -134,8 +134,8 @@ demo:
 	@wait
 
 demo-stop:
-	@pkill -f "im_guard_ml.simulator" 2>/dev/null || true
-	@pkill -f "im_guard_ml.cli.*serve" 2>/dev/null || true
+	@pkill -f "autocare_guard_ml.simulator" 2>/dev/null || true
+	@pkill -f "autocare_guard_ml.cli.*serve" 2>/dev/null || true
 	@echo "所有服务已停止"
 
 test:

@@ -36,7 +36,7 @@ def test_run_benchmark_excludes_warmup_from_reported_requests():
     calls: list[str] = []
 
     def fake_post(_url: str, payload: dict, _token: str, _timeout: float):
-        calls.append(payload["ticket_id"])
+        calls.append(payload["case_id"])
         return 200, 10.0
 
     result = benchmark.run_benchmark(

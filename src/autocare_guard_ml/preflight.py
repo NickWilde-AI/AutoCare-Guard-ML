@@ -21,17 +21,17 @@ def build_production_preflight(env_file: str | Path | None = None, *, environ: d
     checks: list[dict[str, Any]] = []
 
     auth_values = [
-        env.get("IM_GUARD_API_TOKEN", "").strip(),
-        env.get("IM_GUARD_API_TOKENS", "").strip(),
-        env.get("IM_GUARD_API_TOKEN_HASHES", "").strip(),
+        env.get("AUTOCARE_GUARD_API_TOKEN", "").strip(),
+        env.get("AUTOCARE_GUARD_API_TOKENS", "").strip(),
+        env.get("AUTOCARE_GUARD_API_TOKEN_HASHES", "").strip(),
     ]
     _add(
         checks,
         "api_auth_enabled",
         "pass" if any(auth_values) else "fail",
-        "API auth is configured." if any(auth_values) else "Production API must configure IM_GUARD_API_TOKEN_HASHES or another token source.",
+        "API auth is configured." if any(auth_values) else "Production API must configure AUTOCARE_GUARD_API_TOKEN_HASHES or another token source.",
     )
-    token_hashes = _parse_token_hashes(env.get("IM_GUARD_API_TOKEN_HASHES", ""))
+    token_hashes = _parse_token_hashes(env.get("AUTOCARE_GUARD_API_TOKEN_HASHES", ""))
     if token_hashes:
         invalid = [item for item in token_hashes if not _is_sha256_hex(item["hash"])]
         placeholders = [item for item in token_hashes if item["hash"] == PLACEHOLDER_HASH]
@@ -44,10 +44,10 @@ def build_production_preflight(env_file: str | Path | None = None, *, environ: d
         )
         if placeholders:
             _add(checks, "api_token_hash_placeholder", "warn", "Replace placeholder token hashes before real deployment.")
-    elif env.get("IM_GUARD_API_TOKEN", "") or env.get("IM_GUARD_API_TOKENS", ""):
-        _add(checks, "api_plaintext_token", "warn", "Plaintext tokens are acceptable for demo, but production should prefer IM_GUARD_API_TOKEN_HASHES.")
+    elif env.get("AUTOCARE_GUARD_API_TOKEN", "") or env.get("AUTOCARE_GUARD_API_TOKENS", ""):
+        _add(checks, "api_plaintext_token", "warn", "Plaintext tokens are acceptable for demo, but production should prefer AUTOCARE_GUARD_API_TOKEN_HASHES.")
 
-    cors = _split_csv(env.get("IM_GUARD_CORS_ORIGINS", "*"))
+    cors = _split_csv(env.get("AUTOCARE_GUARD_CORS_ORIGINS", "*"))
     _add(
         checks,
         "cors_not_wildcard",
@@ -56,7 +56,7 @@ def build_production_preflight(env_file: str | Path | None = None, *, environ: d
         detail={"origins": cors},
     )
 
-    backend = env.get("IM_GUARD_AUDIT_BACKEND", "jsonl").strip().lower()
+    backend = env.get("AUTOCARE_GUARD_AUDIT_BACKEND", "jsonl").strip().lower()
     _add(
         checks,
         "audit_backend_supported",
@@ -70,16 +70,16 @@ def build_production_preflight(env_file: str | Path | None = None, *, environ: d
         "pass" if backend == "sqlite" else "warn",
         "SQLite audit backend is enabled for production-like single service deployment." if backend == "sqlite" else "JSONL audit backend is demo-oriented; prefer SQLite for production-like showcase.",
     )
-    audit_path = env.get("IM_GUARD_AUDIT_LOG_PATH", "").strip()
+    audit_path = env.get("AUTOCARE_GUARD_AUDIT_LOG_PATH", "").strip()
     _add(
         checks,
         "audit_log_path_configured",
         "pass" if audit_path else "fail",
-        "Audit log path is configured." if audit_path else "Production deployment must configure IM_GUARD_AUDIT_LOG_PATH.",
+        "Audit log path is configured." if audit_path else "Production deployment must configure AUTOCARE_GUARD_AUDIT_LOG_PATH.",
         detail={"path": audit_path},
     )
 
-    max_bytes = _parse_int(env.get("IM_GUARD_MAX_REQUEST_BYTES", ""), default=0)
+    max_bytes = _parse_int(env.get("AUTOCARE_GUARD_MAX_REQUEST_BYTES", ""), default=0)
     _add(
         checks,
         "max_request_bytes_positive",
@@ -87,7 +87,7 @@ def build_production_preflight(env_file: str | Path | None = None, *, environ: d
         "Request size limit is enabled." if max_bytes > 0 else "Production deployment must enable request size limit.",
         detail={"max_request_bytes": max_bytes},
     )
-    rate_limit = _parse_int(env.get("IM_GUARD_RATE_LIMIT_PER_MINUTE", ""), default=-1)
+    rate_limit = _parse_int(env.get("AUTOCARE_GUARD_RATE_LIMIT_PER_MINUTE", ""), default=-1)
     _add(
         checks,
         "rate_limit_enabled",

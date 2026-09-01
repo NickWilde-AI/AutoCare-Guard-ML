@@ -1,6 +1,6 @@
 """Tests for AutoCare JSON parsing and fallback logic."""
 
-from im_guard_ml.parsing import parse_judge_output
+from autocare_guard_ml.parsing import parse_judge_output
 
 
 class TestParseJudgeOutput:

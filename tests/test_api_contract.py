@@ -1,14 +1,14 @@
 import json
 
-from im_guard_ml.api_contract import REQUIRED_ENDPOINTS, build_openapi_contract, validate_openapi_contract
-from im_guard_ml.cli import main
+from autocare_guard_ml.api_contract import REQUIRED_ENDPOINTS, build_openapi_contract, validate_openapi_contract
+from autocare_guard_ml.cli import main
 
 
 def test_build_openapi_contract_contains_required_endpoints():
     schema = build_openapi_contract()
 
-    assert schema["x-im-guard-contract-status"]["status"] == "pass"
-    assert set(schema["x-im-guard-required-endpoints"]) == REQUIRED_ENDPOINTS
+    assert schema["x-autocare-guard-contract-status"]["status"] == "pass"
+    assert set(schema["x-autocare-guard-required-endpoints"]) == REQUIRED_ENDPOINTS
     assert "/judge" in schema["paths"]
     assert "post" in schema["paths"]["/judge"]
 
@@ -30,4 +30,4 @@ def test_cli_api_contract_writes_contract_file(tmp_path):
 
     assert code == 0
     body = json.loads(out.read_text(encoding="utf-8"))
-    assert body["x-im-guard-contract-status"]["status"] == "pass"
+    assert body["x-autocare-guard-contract-status"]["status"] == "pass"

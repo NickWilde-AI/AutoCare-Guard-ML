@@ -1,13 +1,13 @@
 services:
-  # P2-40 接线说明：im-guard-api 与 vllm-judge 是两个独立 profile，
-  # 不会自动联通。要用真实模型服务，需手动设置 im-guard-api 的
+  # P2-40 接线说明：autocare-guard-api 与 vllm-judge 是两个独立 profile，
+  # 不会自动联通。要用真实模型服务，需手动设置 autocare-guard-api 的
   # QWEN_API_BASE=http://vllm-judge:8001/v1 并以 --api（OpenAI 兼容模式）
-  # 启动，或把合并后的 checkpoint 挂载进 im-guard-api 走 --model-path。
-  im-guard-api:
+  # 启动，或把合并后的 checkpoint 挂载进 autocare-guard-api 走 --model-path。
+  autocare-guard-api:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: ai-im-guard-ml:latest
+    image: ai-autocare-guard-ml:latest
     working_dir: /app
     volumes:
       - ../outputs:/app/outputs
@@ -15,10 +15,10 @@ services:
       - audit_service.env.example
     command: >
       sh -c '
-        if [ -n "$${IM_GUARD_MODEL_PATH}" ] && [ -e "$${IM_GUARD_MODEL_PATH}" ]; then
-          im-guard --config "$${IM_GUARD_CONFIG:-configs/default.yaml}" serve --host "$${IM_GUARD_HOST:-0.0.0.0}" --port "$${IM_GUARD_PORT:-8000}" --model-path "$${IM_GUARD_MODEL_PATH}";
+        if [ -n "$${AUTOCARE_GUARD_MODEL_PATH}" ] && [ -e "$${AUTOCARE_GUARD_MODEL_PATH}" ]; then
+          autocare-guard --config "$${AUTOCARE_GUARD_CONFIG:-configs/default.yaml}" serve --host "$${AUTOCARE_GUARD_HOST:-0.0.0.0}" --port "$${AUTOCARE_GUARD_PORT:-8000}" --model-path "$${AUTOCARE_GUARD_MODEL_PATH}";
         else
-          im-guard --config "$${IM_GUARD_CONFIG:-configs/default.yaml}" serve --host "$${IM_GUARD_HOST:-0.0.0.0}" --port "$${IM_GUARD_PORT:-8000}";
+          autocare-guard --config "$${AUTOCARE_GUARD_CONFIG:-configs/default.yaml}" serve --host "$${AUTOCARE_GUARD_HOST:-0.0.0.0}" --port "$${AUTOCARE_GUARD_PORT:-8000}";
         fi
       '
     ports:
@@ -38,8 +38,8 @@ services:
       - ./vllm_serve.sh:/app/deploy/vllm_serve.sh:ro
     working_dir: /app
     environment:
-      MODEL_PATH: /app/outputs/im-audit-judge
-      SERVED_MODEL_NAME: im-audit-judge
+      MODEL_PATH: /app/outputs/autocare-risk-judge
+      SERVED_MODEL_NAME: autocare-risk-judge
       TP_SIZE: "4"
       MAX_MODEL_LEN: "8192"
     command: bash /app/deploy/vllm_serve.sh

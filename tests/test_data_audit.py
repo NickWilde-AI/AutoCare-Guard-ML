@@ -1,4 +1,4 @@
-from im_guard_ml.data_audit import audit_dataset, detect_pii_types
+from autocare_guard_ml.data_audit import audit_dataset, detect_pii_types
 
 
 def test_detect_pii_types_finds_email_phone_and_id_card():

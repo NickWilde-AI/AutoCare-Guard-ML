@@ -1,4 +1,4 @@
-from im_guard_ml.privacy import build_input_summary, redact_text
+from autocare_guard_ml.privacy import build_input_summary, redact_text
 
 
 def test_redact_text_masks_common_pii():

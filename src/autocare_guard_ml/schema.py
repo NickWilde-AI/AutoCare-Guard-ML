@@ -21,7 +21,7 @@ class EventJudgment(StrEnum):
     RISK_EVENT = "risk_event"
     NOT_RISK_EVENT = "not_risk_event"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"
-    # 旧 IM 成员名别名（同值 alias，过渡期兼容 AttributeError）
+    # legacy 成员名别名（同值 alias，过渡期兼容 AttributeError）
     EXIST_VIOLATION = "risk_event"
     NOT_EXIST_VIOLATION = "not_risk_event"
 
@@ -33,7 +33,7 @@ class RecommendedAction(StrEnum):
     CREATE_WORK_ORDER = "create_work_order"
     EXPERT_REVIEW = "expert_review"
     EMERGENCY_REVIEW = "emergency_review"
-    # 旧 IM 成员名别名（同值 alias，过渡期兼容）
+    # legacy 成员名别名（同值 alias，过渡期兼容）
     IGNORE = "information_reply"
     WARNING = "service_followup"
     LIMIT_ACCOUNT = "create_work_order"
@@ -151,7 +151,7 @@ class ServiceCase:
                 or label_obj.get("judgment_basis", ""),
                 service_escalation_flags=list(label_obj.get("service_escalation_flags") or []),
             )
-            # 旧 IM 枚举值映射到 AutoCare（仅输入兼容，不鼓励新数据继续用）。
+            # legacy 枚举值映射到 AutoCare（仅输入兼容，不鼓励新数据继续用）。
             label = _normalize_legacy_label(label)
 
         known = {
@@ -245,7 +245,7 @@ AuditCase = ServiceCase
 
 
 def _normalize_legacy_label(label: CaseLabel) -> CaseLabel:
-    """把残留的 IM 枚举映射到 AutoCare（仅兼容旧 fixture）。"""
+    """把残留的 legacy 枚举映射到 AutoCare（仅兼容旧 fixture）。"""
     judgment_map = {
         "exist_violation": EventJudgment.RISK_EVENT.value,
         "not_exist_violation": EventJudgment.NOT_RISK_EVENT.value,
@@ -301,7 +301,7 @@ def validate_evidence_refs(refs: Any, case: dict[str, Any] | None = None) -> lis
 
 def validate_label(label: dict[str, Any], case: dict[str, Any] | None = None) -> list[str]:
     errors: list[str] = []
-    # 兼容旧字段名读入，并 remap 旧 IM 枚举值（与 parsing._canonicalize / CaseLabel 路径一致）
+    # 兼容旧字段名读入，并 remap legacy 枚举值（与 parsing._canonicalize / CaseLabel 路径一致）
     normalized = dict(label)
     if "event_topic" not in normalized and "topic" in normalized:
         normalized["event_topic"] = normalized["topic"]

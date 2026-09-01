@@ -12,7 +12,7 @@ from .training import run_sft
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="im-guard")
+    parser = argparse.ArgumentParser(prog="autocare-guard")
     parser.add_argument("--config", default="configs/default.yaml")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -35,14 +35,14 @@ def main(argv: list[str] | None = None) -> int:
     p_eval_report = sub.add_parser("eval-report")
     p_eval_report.add_argument("pred_jsonl")
     p_eval_report.add_argument("--out", default="outputs/offline_eval_report.md")
-    p_eval_report.add_argument("--title", default="AI-IM-Guard-ML 离线评测报告")
+    p_eval_report.add_argument("--title", default="AutoCare-Guard-ML 离线评测报告")
 
     p_ab = sub.add_parser("ab-report")
     p_ab.add_argument("--control", required=True, help="Control prediction JSONL with label/prediction fields.")
     p_ab.add_argument("--candidate", required=True, help="Candidate prediction JSONL with label/prediction fields.")
     p_ab.add_argument("--out", default="outputs/ab_report.md")
     p_ab.add_argument("--json-out", help="Optional machine-readable JSON report path.")
-    p_ab.add_argument("--title", default="AI-IM-Guard-ML A/B 灰度对比报告")
+    p_ab.add_argument("--title", default="AutoCare-Guard-ML A/B 灰度对比报告")
 
     p_api_contract = sub.add_parser("api-contract")
     p_api_contract.add_argument("--out", default="outputs/openapi_contract.json")
@@ -210,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(contract, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(args.out)
-        if args.fail_on_missing and contract["x-im-guard-contract-status"]["status"] != "pass":
+        if args.fail_on_missing and contract["x-autocare-guard-contract-status"]["status"] != "pass":
             return 1
         return 0
     if args.cmd == "production-preflight":

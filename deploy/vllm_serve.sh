@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MODEL_PATH="${MODEL_PATH:-outputs/im-audit-judge}"
-SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-im-audit-judge}"
+MODEL_PATH="${MODEL_PATH:-outputs/autocare-risk-judge}"
+SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-autocare-risk-judge}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8001}"
 TP_SIZE="${TP_SIZE:-4}"

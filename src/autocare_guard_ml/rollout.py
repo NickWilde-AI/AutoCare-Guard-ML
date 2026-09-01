@@ -20,9 +20,9 @@ DEFAULT_GUARDRAILS = {
 
 # 部署模板中红线的运行时覆盖（P1-08）
 _ENV_GUARDRAIL_OVERRIDES = {
-    "IM_GUARD_BAN_FPR_REDLINE": "emergency_review_fpr_max",  # 兼容旧 env 名
-    "IM_GUARD_EMERGENCY_FPR_REDLINE": "emergency_review_fpr_max",
-    "IM_GUARD_P95_LATENCY_BUDGET_MS": "p95_latency_ms_max",
+    "AUTOCARE_GUARD_BAN_FPR_REDLINE": "emergency_review_fpr_max",  # 兼容旧 env 名
+    "AUTOCARE_GUARD_EMERGENCY_FPR_REDLINE": "emergency_review_fpr_max",
+    "AUTOCARE_GUARD_P95_LATENCY_BUDGET_MS": "p95_latency_ms_max",
 }
 
 
@@ -104,7 +104,7 @@ def build_ab_report(
     }
 
 
-def render_ab_report_markdown(report: dict[str, Any], *, title: str = "AI-IM-Guard-ML A/B 灰度对比报告") -> str:
+def render_ab_report_markdown(report: dict[str, Any], *, title: str = "AutoCare-Guard-ML A/B 灰度对比报告") -> str:
     lines = [
         f"# {title}",
         "",

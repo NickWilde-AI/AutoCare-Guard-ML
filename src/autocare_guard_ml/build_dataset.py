@@ -269,7 +269,7 @@ def split_rows(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m im_guard_ml.build_dataset")
+    parser = argparse.ArgumentParser(prog="python -m autocare_guard_ml.build_dataset")
     parser.add_argument("--internal", action="append", default=[], help="Internal JSONL path, can be repeated.")
     parser.add_argument("--public", action="append", default=[], help="Public binary JSONL path, can be repeated.")
     parser.add_argument("--public-xguard", action="append", default=[], help="XGuard JSONL path, can be repeated.")

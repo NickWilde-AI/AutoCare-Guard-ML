@@ -1,6 +1,6 @@
 """Tests for the AutoCare heuristic rule judge."""
 
-from im_guard_ml.inference import HeuristicJudge
+from autocare_guard_ml.inference import HeuristicJudge
 
 
 def _judge() -> HeuristicJudge:

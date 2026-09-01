@@ -1,7 +1,7 @@
 import json
 
-from im_guard_ml.cli import main
-from im_guard_ml.rollout import build_ab_report, render_ab_report_markdown
+from autocare_guard_ml.cli import main
+from autocare_guard_ml.rollout import build_ab_report, render_ab_report_markdown
 
 
 def _row(ticket_id, label, prediction, **extra):

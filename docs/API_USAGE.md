@@ -2,35 +2,35 @@
 
 本文档说明 FastAPI 售后风险研判服务的接口、鉴权、错误码、审计查询和运维检查方式。它面向生产化展示和接入评审，不替代真实生产网关、密钥系统或集中权限平台。
 
-领域口径为 AutoCare（新能源汽车售后风险研判与工单路由）。仓库 / 包 / CLI 仍使用历史命名 `AI-IM-Guard-ML` / `im_guard_ml` / `im-guard`。请求与响应同时接受旧 IM 字段名兼容（如 `ticket_id`、`chat_evidence_list`、`final_judgment`、`handling_suggestion`）。
+领域口径为 AutoCare（新能源汽车售后风险研判与工单路由）。项目名 `AutoCare-Guard-ML`，包名 `autocare_guard_ml`，CLI `autocare-guard`。请求与响应同时接受 legacy 输入字段兼容（如 `ticket_id`、`chat_evidence_list`、`final_judgment`、`handling_suggestion`）。
 
 ## 启动
 
 本地 demo：
 
 ```bash
-PYTHONPATH=src im-guard --config configs/default.yaml serve --port 8000
+PYTHONPATH=src autocare-guard --config configs/default.yaml serve --port 8000
 ```
 
 开启 token、审计、请求大小限制和限流：
 
 ```bash
-export IM_GUARD_API_TOKEN_HASHES="$(python3 - <<'PY'
+export AUTOCARE_GUARD_API_TOKEN_HASHES="$(python3 - <<'PY'
 import hashlib
 print(hashlib.sha256('replace-with-a-secret'.encode()).hexdigest() + ':admin')
 PY
 )"
-export IM_GUARD_AUDIT_BACKEND=jsonl
-export IM_GUARD_AUDIT_LOG_PATH=outputs/api_audit_events.jsonl
-export IM_GUARD_CORS_ORIGINS="http://127.0.0.1:8000,http://localhost:8000"
-export IM_GUARD_MAX_REQUEST_BYTES=262144
-export IM_GUARD_RATE_LIMIT_PER_MINUTE=120
-PYTHONPATH=src im-guard --config configs/default.yaml serve --port 8000
+export AUTOCARE_GUARD_AUDIT_BACKEND=jsonl
+export AUTOCARE_GUARD_AUDIT_LOG_PATH=outputs/api_audit_events.jsonl
+export AUTOCARE_GUARD_CORS_ORIGINS="http://127.0.0.1:8000,http://localhost:8000"
+export AUTOCARE_GUARD_MAX_REQUEST_BYTES=262144
+export AUTOCARE_GUARD_RATE_LIMIT_PER_MINUTE=120
+PYTHONPATH=src autocare-guard --config configs/default.yaml serve --port 8000
 ```
 
 ## 鉴权与角色
 
-默认不设置 `IM_GUARD_API_TOKEN`、`IM_GUARD_API_TOKENS` 或 `IM_GUARD_API_TOKEN_HASHES` 时，接口保持本地 demo 可访问。设置 token 后，业务接口必须带：
+默认不设置 `AUTOCARE_GUARD_API_TOKEN`、`AUTOCARE_GUARD_API_TOKENS` 或 `AUTOCARE_GUARD_API_TOKEN_HASHES` 时，接口保持本地 demo 可访问。设置 token 后，业务接口必须带：
 
 ```text
 Authorization: Bearer <token>
@@ -39,22 +39,22 @@ Authorization: Bearer <token>
 单 token：
 
 ```bash
-export IM_GUARD_API_TOKEN="replace-with-a-secret"
+export AUTOCARE_GUARD_API_TOKEN="replace-with-a-secret"
 ```
 
 多 token + 最小角色权限：
 
 ```bash
-export IM_GUARD_API_TOKENS="writer-token:writer,reader-token:reader,audit-token:auditor"
+export AUTOCARE_GUARD_API_TOKENS="writer-token:writer,reader-token:reader,audit-token:auditor"
 ```
 
 生产化展示推荐只在环境变量里保存 SHA-256 token hash，格式为 `sha256(token):role`：
 
 ```bash
-export IM_GUARD_API_TOKEN_HASHES="a2b...64位hex...9f:writer,0f3...64位hex...1c:auditor"
+export AUTOCARE_GUARD_API_TOKEN_HASHES="a2b...64位hex...9f:writer,0f3...64位hex...1c:auditor"
 ```
 
-服务端会对请求 Bearer token 做 SHA-256 摘要，并用常量时间比较匹配 hash。`IM_GUARD_API_TOKEN` 和 `IM_GUARD_API_TOKENS` 仍保留，用于本地 demo 或临时验证。
+服务端会对请求 Bearer token 做 SHA-256 摘要，并用常量时间比较匹配 hash。`AUTOCARE_GUARD_API_TOKEN` 和 `AUTOCARE_GUARD_API_TOKENS` 仍保留，用于本地 demo 或临时验证。
 
 | 角色 | 可访问能力 |
 | --- | --- |
@@ -82,7 +82,7 @@ export IM_GUARD_API_TOKEN_HASHES="a2b...64位hex...9f:writer,0f3...64位hex...1c
 FastAPI 会自动生成 OpenAPI schema。本仓库额外提供 `api-contract` 命令，把关键业务接口作为契约门禁：
 
 ```bash
-PYTHONPATH=src python3 -m im_guard_ml.cli --config configs/default.yaml api-contract \
+PYTHONPATH=src python3 -m autocare_guard_ml.cli --config configs/default.yaml api-contract \
   --out outputs/openapi_contract.json \
   --fail-on-missing
 ```
@@ -138,7 +138,29 @@ curl -X POST http://127.0.0.1:8000/judge \
   }'
 ```
 
-旧字段仍兼容，例如可用 `ticket_id` 代替 `case_id`、`chat_evidence_list` 代替 `conversation_evidence`；响应中也会回填部分旧键名以便过渡。
+制动场景示例：
+
+```bash
+curl -X POST http://127.0.0.1:8000/judge \
+  -H "Authorization: Bearer replace-with-a-secret" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "case_id": "demo-brake-1",
+    "conversation_evidence": [
+      {"role": "owner", "text": "高速上刹车感觉变软，仪表有制动告警。"}
+    ],
+    "vehicle_signal_summary": {
+      "motion_state": "driving",
+      "alert_summary": ["制动系统告警"],
+      "speed_kph": 80
+    },
+    "fault_evidence": [
+      {"domain": "brake", "severity": "high", "count": 1}
+    ]
+  }'
+```
+
+legacy 输入字段仍兼容，例如可用 `ticket_id` 代替 `case_id`、`chat_evidence_list` 代替 `conversation_evidence`；响应中也会回填部分兼容键名以便过渡。
 
 响应字段：
 
@@ -175,8 +197,8 @@ curl -X POST http://127.0.0.1:8000/judge \
 | HTTP 状态 | `error.code` | 触发条件 |
 | --- | --- | --- |
 | `401` | `unauthorized` | token 缺失、错误或角色权限不足 |
-| `413` | `request_too_large` | 请求体超过 `IM_GUARD_MAX_REQUEST_BYTES` |
-| `429` | `rate_limited` | 单 IP 每分钟请求数超过 `IM_GUARD_RATE_LIMIT_PER_MINUTE` |
+| `413` | `request_too_large` | 请求体超过 `AUTOCARE_GUARD_MAX_REQUEST_BYTES` |
+| `429` | `rate_limited` | 单 IP 每分钟请求数超过 `AUTOCARE_GUARD_RATE_LIMIT_PER_MINUTE` |
 | `422` | `validation_error` | FastAPI 请求校验失败 |
 | 其他 | `http_error` | 通用 HTTP 异常 |
 
@@ -185,15 +207,15 @@ curl -X POST http://127.0.0.1:8000/judge \
 JSONL 审计：
 
 ```bash
-export IM_GUARD_AUDIT_BACKEND=jsonl
-export IM_GUARD_AUDIT_LOG_PATH=outputs/api_audit_events.jsonl
+export AUTOCARE_GUARD_AUDIT_BACKEND=jsonl
+export AUTOCARE_GUARD_AUDIT_LOG_PATH=outputs/api_audit_events.jsonl
 ```
 
 SQLite 审计：
 
 ```bash
-export IM_GUARD_AUDIT_BACKEND=sqlite
-export IM_GUARD_AUDIT_LOG_PATH=outputs/api_audit_events.sqlite
+export AUTOCARE_GUARD_AUDIT_BACKEND=sqlite
+export AUTOCARE_GUARD_AUDIT_LOG_PATH=outputs/api_audit_events.sqlite
 ```
 
 查询 case/ticket：
@@ -214,7 +236,7 @@ curl http://127.0.0.1:8000/dashboard/data?window=5m \
 curl http://127.0.0.1:8000/metrics
 ```
 
-Prometheus 指标包含请求总量、风险等级、主题、处置建议（`recommended_action`）、route、解析异常数和延迟分位数。
+Prometheus 指标包含请求总量、风险等级、主题、动作建议（`recommended_action`）、route、解析异常数和延迟分位数。
 
 ## 压测
 

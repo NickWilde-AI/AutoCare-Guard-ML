@@ -1,0 +1,47 @@
+groups:
+  - name: autocare-guard-api
+    rules:
+      - alert: AutoCareHighParseErrorRate
+        expr: autocare_guard_parse_non_ok_total / clamp_min(autocare_guard_requests_total, 1) > 0.02
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AutoCare parse_non_ok rate is critical"
+          description: "模型输出解析异常率超过 2%，应检查 prompt、模型版本和后处理。"
+
+      - alert: AutoCareHighEmergencyReviewRate
+        expr: autocare_guard_requests_by_handling_total{handling_suggestion="emergency_review"} / clamp_min(autocare_guard_requests_total, 1) > 0.08
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AutoCare emergency_review rate is critical"
+          description: "emergency_review 占比超过告警阈值，应立即加强人工确认并排查车辆证据门禁与上游信号链路。"
+
+      - alert: AutoCareP95LatencyHigh
+        expr: autocare_guard_latency_ms{quantile="p95"} > 1200
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AutoCare P95 latency is above budget"
+          description: "P95 延迟超过 1200ms，应检查 vLLM queue、输入长度、prefix cache 和限流策略。"
+
+      - alert: AutoCareNoTraffic
+        expr: autocare_guard_requests_total == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AutoCare has no observed traffic"
+          description: "15 分钟内没有研判请求，需确认流量路由、服务健康或指标抓取是否异常。"
+
+      - alert: AutoCareMissingVehicleEvidenceHigh
+        expr: autocare_guard_missing_vehicle_evidence_rate > 0.20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "AutoCare missing vehicle evidence rate is high"
+          description: "车辆侧证据缺失率升高，需检查信号摘要与故障证据接入。"

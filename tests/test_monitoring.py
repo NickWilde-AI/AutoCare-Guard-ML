@@ -2,8 +2,8 @@
 
 import pytest
 
-from im_guard_ml.monitoring import build_monitoring_report, build_sliding_window_report, compare_reports
-from im_guard_ml.drift_detection import (
+from autocare_guard_ml.monitoring import build_monitoring_report, build_sliding_window_report, compare_reports
+from autocare_guard_ml.drift_detection import (
     chi_square_test,
     ks_test,
     population_stability_index,

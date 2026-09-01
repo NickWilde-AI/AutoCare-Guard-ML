@@ -114,7 +114,7 @@ def build_training_readiness_report(
         },
         "recommended_commands": [
             'pip install -e ".[train]"',
-            f"LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 im-guard --config {config_path} train {dataset}",
+            f"LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 autocare-guard --config {config_path} train {dataset}",
         ],
         "training_task": {
             "objective": "Learn structured AutoCare service-case JSON outputs from multi-evidence inputs.",

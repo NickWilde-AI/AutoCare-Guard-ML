@@ -17,7 +17,7 @@ def test_k8s_sqlite_showcase_defaults_to_single_replica():
     configmap = _load_yaml("deploy/k8s/configmap.yaml")
     pvc = _load_yaml("deploy/k8s/pvc.yaml")
 
-    assert configmap["data"]["IM_GUARD_AUDIT_BACKEND"] == "sqlite"
+    assert configmap["data"]["AUTOCARE_GUARD_AUDIT_BACKEND"] == "sqlite"
     assert deployment["spec"]["replicas"] == 1
     assert pvc["spec"]["accessModes"] == ["ReadWriteOnce"]
 
@@ -32,7 +32,7 @@ def test_k8s_probes_cover_ready_and_health_endpoints():
 
 def test_compose_api_service_keeps_demo_safe_defaults():
     compose = _load_yaml("deploy/docker-compose.example.yml")
-    api = compose["services"]["im-guard-api"]
+    api = compose["services"]["autocare-guard-api"]
 
     assert api["build"] == {"context": "..", "dockerfile": "deploy/Dockerfile"}
     assert api["env_file"] == ["audit_service.env.example"]
@@ -41,7 +41,7 @@ def test_compose_api_service_keeps_demo_safe_defaults():
     assert "/ready" in " ".join(str(part) for part in api["healthcheck"]["test"])
 
     command = api["command"]
-    assert "IM_GUARD_MODEL_PATH" in command
+    assert "AUTOCARE_GUARD_MODEL_PATH" in command
     assert "--model-path" in command
     assert "else" in command
     assert "serve --host" in command
@@ -52,7 +52,7 @@ def test_compose_vllm_service_is_separate_gpu_profile_target():
     vllm = compose["services"]["vllm-judge"]
 
     assert vllm["image"] == "vllm/vllm-openai:latest"
-    assert vllm["environment"]["SERVED_MODEL_NAME"] == "im-audit-judge"
+    assert vllm["environment"]["SERVED_MODEL_NAME"] == "autocare-risk-judge"
     assert vllm["ports"] == ["8001:8001"]
     devices = vllm["deploy"]["resources"]["reservations"]["devices"]
     assert devices == [{"capabilities": ["gpu"]}]
@@ -70,17 +70,17 @@ def test_configmap_covers_redline_envs_and_prod_env_keys():
     }
     # 密钥类走 secret 文件；权重路径由 volume/镜像管理，均不在 configmap 中要求。
     excluded_keys = {
-        "IM_GUARD_API_TOKEN", "IM_GUARD_API_TOKENS", "IM_GUARD_API_TOKEN_HASHES",
-        "IM_GUARD_MODEL_PATH",
+        "AUTOCARE_GUARD_API_TOKEN", "AUTOCARE_GUARD_API_TOKENS", "AUTOCARE_GUARD_API_TOKEN_HASHES",
+        "AUTOCARE_GUARD_MODEL_PATH",
     }
     assert set(configmap) == prod_keys - excluded_keys
-    assert configmap["IM_GUARD_P95_LATENCY_BUDGET_MS"] == "1200"
-    assert configmap["IM_GUARD_BAN_FPR_REDLINE"] == "0.03"
+    assert configmap["AUTOCARE_GUARD_P95_LATENCY_BUDGET_MS"] == "1200"
+    assert configmap["AUTOCARE_GUARD_BAN_FPR_REDLINE"] == "0.03"
 
 
 def test_dockerfile_respects_env_overrides():
-    # P2-09：Dockerfile CMD 必须消费 IM_GUARD_CONFIG/HOST/PORT 环境变量。
+    # P2-09：Dockerfile CMD 必须消费 AUTOCARE_GUARD_CONFIG/HOST/PORT 环境变量。
     dockerfile = (ROOT / "deploy" / "Dockerfile").read_text(encoding="utf-8")
-    assert "IM_GUARD_CONFIG" in dockerfile
-    assert "IM_GUARD_HOST" in dockerfile
-    assert "IM_GUARD_PORT" in dockerfile
+    assert "AUTOCARE_GUARD_CONFIG" in dockerfile
+    assert "AUTOCARE_GUARD_HOST" in dockerfile
+    assert "AUTOCARE_GUARD_PORT" in dockerfile

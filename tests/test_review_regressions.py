@@ -4,8 +4,8 @@
 - P1-04 KS 并列值 D 统计失真
 - P1-05 AUPRC 并列概率抬升
 - P1-17 split_rows 工单跨集泄漏
-- P2-11 违规+安全处置矛盾组合
-- P2-12 ban 行为证据判定收紧
+- P2-11 风险事件与安全处置矛盾组合
+- P2-12 emergency_review 车辆证据判定收紧
 - P2-19 公开数据主题透传校验
 - P2-38 模型尺寸小数解析
 - P2-49 fleiss ragged 拒绝
@@ -22,14 +22,14 @@ import json
 
 import pytest
 
-from im_guard_ml.build_dataset import normalize_public, split_rows
-from im_guard_ml.drift_detection import ks_test
-from im_guard_ml.evaluation import auprc, fleiss_kappa, percentile
-from im_guard_ml.parsing import parse_judge_output
-from im_guard_ml.postprocess import postprocess_model_output, postprocess_prediction
-from im_guard_ml.schema import validate_label
-from im_guard_ml.training import build_completion_labels
-from im_guard_ml.training_readiness import _model_size_gb
+from autocare_guard_ml.build_dataset import normalize_public, split_rows
+from autocare_guard_ml.drift_detection import ks_test
+from autocare_guard_ml.evaluation import auprc, fleiss_kappa, percentile
+from autocare_guard_ml.parsing import parse_judge_output
+from autocare_guard_ml.postprocess import postprocess_model_output, postprocess_prediction
+from autocare_guard_ml.schema import validate_label
+from autocare_guard_ml.training import build_completion_labels
+from autocare_guard_ml.training_readiness import _model_size_gb
 
 
 # ---------------------------------------------------------------------------
@@ -237,7 +237,7 @@ def test_build_completion_labels_masks_prompt_and_fields():
 
 def test_completion_mask_collator_pads_and_truncates():
     torch = pytest.importorskip("torch")
-    from im_guard_ml.training import CompletionMaskCollator
+    from autocare_guard_ml.training import CompletionMaskCollator
 
     collator = CompletionMaskCollator(pad_token_id=0, max_length=4)
     features = [
@@ -276,9 +276,9 @@ _SAFE = {
 
 
 def test_ab_report_env_guardrail_override(monkeypatch):
-    from im_guard_ml.rollout import build_ab_report
+    from autocare_guard_ml.rollout import build_ab_report
 
-    monkeypatch.setenv("IM_GUARD_BAN_FPR_REDLINE", "0.01")
+    monkeypatch.setenv("AUTOCARE_GUARD_BAN_FPR_REDLINE", "0.01")
     control = [{"ticket_id": "s1", "label": _SAFE, "prediction": _SAFE}]
     candidate = [
         {
@@ -303,10 +303,10 @@ def test_ab_report_env_guardrail_override(monkeypatch):
 def test_judge_generated_request_id_consistent(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
 
-    from im_guard_ml.api import create_app
+    from autocare_guard_ml.api import create_app
 
-    monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKEN", raising=False)
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     client = TestClient(create_app())
     resp = client.post(
         "/judge",
@@ -319,10 +319,10 @@ def test_judge_generated_request_id_consistent(monkeypatch, tmp_path):
 def test_judge_emergency_without_vehicle_downgraded_and_observable(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
 
-    from im_guard_ml.api import create_app
+    from autocare_guard_ml.api import create_app
 
-    monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKEN", raising=False)
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     client = TestClient(create_app())
     resp = client.post(
         "/judge",
@@ -344,12 +344,12 @@ def test_judge_emergency_without_vehicle_downgraded_and_observable(monkeypatch, 
 def test_reader_cannot_access_config_endpoint(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
 
-    from im_guard_ml.api import create_app
+    from autocare_guard_ml.api import create_app
 
-    monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
-    monkeypatch.delenv("IM_GUARD_API_TOKENS", raising=False)
-    monkeypatch.setenv("IM_GUARD_API_TOKENS", "reader-token:reader")
-    monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKEN", raising=False)
+    monkeypatch.delenv("AUTOCARE_GUARD_API_TOKENS", raising=False)
+    monkeypatch.setenv("AUTOCARE_GUARD_API_TOKENS", "reader-token:reader")
+    monkeypatch.setenv("AUTOCARE_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     client = TestClient(create_app())
     assert client.get("/config", headers={"Authorization": "Bearer reader-token"}).status_code == 401
     assert client.get("/dashboard/data", headers={"Authorization": "Bearer reader-token"}).status_code == 200

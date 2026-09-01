@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>IM Guard - 智能审核监控大盘</title>
+<title>AutoCare - 售后风险研判看板</title>
 <style>
 :root {
   --bg:#f8f9fb;--bg-card:#fff;--border:#e5e8ed;--text:#1a2233;--text-secondary:#6b7a90;
@@ -127,8 +127,8 @@ body.dark .alert-item.critical{background:#450a0a;border-color:#991b1b;}
 <body>
 <nav class="topnav">
   <div class="topnav-left">
-    <div class="topnav-logo">G</div>
-    <span class="topnav-title">IM Guard 智能审核监控大盘</span>
+    <div class="topnav-logo">A</div>
+    <span class="topnav-title">AutoCare 售后风险研判看板</span>
     <span class="topnav-env">生产环境</span>
   </div>
   <div class="topnav-right">
@@ -144,23 +144,23 @@ body.dark .alert-item.critical{background:#450a0a;border-color:#991b1b;}
 <div class="main">
   <div class="grid-4">
     <div class="kpi">
-      <div class="kpi-label">累计审核请求</div>
+      <div class="kpi-label">累计研判请求</div>
       <div class="kpi-value" id="valTotal">-</div>
       <div class="kpi-sub" id="subThroughput">-</div>
       <svg class="kpi-spark" id="sparkTotal" width="100%" height="28"></svg>
     </div>
     <div class="kpi">
-      <div class="kpi-label">违规判定</div>
+      <div class="kpi-label">风险事件</div>
       <div class="kpi-value" style="color:var(--accent-red)" id="valViolation">-</div>
       <div class="kpi-sub" id="subViolation">-</div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">安全放行</div>
+      <div class="kpi-label">信息回复 / 无风险</div>
       <div class="kpi-value" style="color:var(--accent-green)" id="valSafe">-</div>
       <div class="kpi-trend trend-good" id="trendSafe">-</div>
     </div>
     <div class="kpi">
-      <div class="kpi-label">人工复核队列</div>
+      <div class="kpi-label">专家 / 紧急复核</div>
       <div class="kpi-value" style="color:var(--accent-purple)" id="valHuman">-</div>
       <div class="kpi-sub" id="subBanRate">-</div>
     </div>
@@ -172,17 +172,17 @@ body.dark .alert-item.critical{background:#450a0a;border-color:#991b1b;}
       <span class="section-badge" id="latencyBadge">平均延迟: -</span>
     </div>
     <div class="pipeline">
-      <div class="pipe-node active"><div class="pipe-node-title">IM 后端</div><div class="pipe-node-sub">gRPC / HTTP</div></div>
+      <div class="pipe-node active"><div class="pipe-node-title">服务事件</div><div class="pipe-node-sub">热线 / App / 门店</div></div>
       <span class="pipe-arrow">→</span>
-      <div class="pipe-node active"><div class="pipe-node-title">证据聚合</div><div class="pipe-node-sub">聊天+行为+场景</div></div>
+      <div class="pipe-node active"><div class="pipe-node-title">多证据</div><div class="pipe-node-sub">对话+车辆+故障+履历</div></div>
       <span class="pipe-arrow">→</span>
       <div class="pipe-node active"><div class="pipe-node-title">Prompt 渲染</div><div class="pipe-node-sub">Rubric+策略表</div></div>
       <span class="pipe-arrow">→</span>
-      <div class="pipe-node active"><div class="pipe-node-title">LLM 推理</div><div class="pipe-node-sub">vLLM · Continuous Batching</div></div>
+      <div class="pipe-node active"><div class="pipe-node-title">Judge</div><div class="pipe-node-sub">LLM · Continuous Batching</div></div>
       <span class="pipe-arrow">→</span>
       <div class="pipe-node active"><div class="pipe-node-title">后处理</div><div class="pipe-node-sub">校验+纠错+兜底</div></div>
       <span class="pipe-arrow">→</span>
-      <div class="pipe-node active"><div class="pipe-node-title">策略路由</div><div class="pipe-node-sub">自动/人审/封禁</div></div>
+      <div class="pipe-node active"><div class="pipe-node-title">工单路由</div><div class="pipe-node-sub">跟进/工单/专家/紧急</div></div>
       <span class="pipe-arrow">→</span>
       <div class="pipe-node active"><div class="pipe-node-title">审计监控</div><div class="pipe-node-sub">日志+指标+告警</div></div>
     </div>
@@ -210,7 +210,7 @@ body.dark .alert-item.critical{background:#450a0a;border-color:#991b1b;}
   <div class="grid-2">
     <div class="section">
       <div class="section-header">
-        <span class="section-title">实时审核结果 <span style="font-size:11px;color:var(--text-secondary);font-weight:400;">点击行查看详情</span></span>
+        <span class="section-title">实时研判结果 <span style="font-size:11px;color:var(--text-secondary);font-weight:400;">点击行查看详情</span></span>
         <span class="section-badge" id="liveBadge">实时</span>
       </div>
       <table class="table">
@@ -231,9 +231,9 @@ body.dark .alert-item.critical{background:#450a0a;border-color:#991b1b;}
           <div style="background:#f87171;transition:width .6s;" id="ratioRed"></div>
         </div>
         <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--text-secondary);">
-          <span>忽略 <b id="rateIgnore" style="color:var(--accent-green)">-</b></span>
-          <span>警告+限号 <b id="rateWarn" style="color:var(--accent-orange)">-</b></span>
-          <span>封禁 <b id="rateBan" style="color:var(--accent-red)">-</b></span>
+          <span>信息回复 <b id="rateIgnore" style="color:var(--accent-green)">-</b></span>
+          <span>跟进/工单 <b id="rateWarn" style="color:var(--accent-orange)">-</b></span>
+          <span>紧急复核 <b id="rateBan" style="color:var(--accent-red)">-</b></span>
         </div>
       </div>
       <div style="font-size:11px;color:var(--text-secondary);margin-bottom:6px;">处置趋势</div>
@@ -245,7 +245,7 @@ body.dark .alert-item.critical{background:#450a0a;border-color:#991b1b;}
   <div class="grid-2">
     <div class="section">
       <div class="section-header">
-        <span class="section-title">违规主题分布（点击展开下钻）</span>
+        <span class="section-title">事件主题分布（点击展开下钻）</span>
         <span class="section-badge" id="topicBadge">-</span>
       </div>
       <div id="topicList" style="font-size:12px;color:var(--text-secondary);">等待数据...</div>
@@ -347,8 +347,8 @@ function onSpeedChange(v){
 
 // tag helpers
 function riskTag(l){const m={high_risk:['高风险','tag-high'],mid_risk:['中风险','tag-mid'],low_risk:['低风险','tag-low']};const[t,c]=m[l]||['未知','tag-low'];return`<span class="tag ${c}">${t}</span>`}
-function handleTag(h){const m={ban_account:['封禁','tag-ban'],limit_account:['限号','tag-limit'],warning:['警告','tag-warning'],ignore:['忽略','tag-ignore']};const[t,c]=m[h]||[h,''];return`<span class="tag ${c}">${t}</span>`}
-function routeTag(r){const m={human_review_required:['人工复核','tag-human'],auto_close:['自动关闭','tag-auto'],auto_action:['自动执行','tag-auto'],policy_action:['策略执行','tag-auto']};const[t,c]=m[r]||[r,''];return`<span class="tag ${c}">${t}</span>`}
+function handleTag(h){const m={emergency_review:['紧急复核','tag-ban'],expert_review:['专家复核','tag-limit'],create_work_order:['创建工单','tag-warning'],service_followup:['服务跟进','tag-warning'],collect_more_evidence:['补证','tag-ignore'],information_reply:['信息回复','tag-ignore']};const[t,c]=m[h]||[h,''];return`<span class="tag ${c}">${t}</span>`}
+function routeTag(r){const m={human_review_required:['人工复核','tag-human'],review_queue:['复核队列','tag-human'],auto_close:['自动关闭','tag-auto'],auto_action:['自动执行','tag-auto'],policy_action:['策略执行','tag-auto'],fallback_or_review:['兜底复核','tag-human']};const[t,c]=m[r]||[r,''];return`<span class="tag ${c}">${t}</span>`}
 function fmtTime(s){if(s<60)return s+'秒';if(s<3600)return Math.floor(s/60)+'分'+s%60+'秒';return Math.floor(s/3600)+'时'+Math.floor(s%3600/60)+'分'}
 
 // 数字滚动动效
@@ -362,16 +362,16 @@ function animateNum(el,target){
 // 工单详情弹窗
 function showDetail(idx){
   const x=recentCache[idx];if(!x)return;
-  document.getElementById('modalTitle').textContent='工单 '+x.ticket_id;
+  document.getElementById('modalTitle').textContent='工单 '+(x.case_id||x.ticket_id);
   document.getElementById('modalBody').innerHTML=`
     <div class="modal-field"><div class="modal-field-label">时间</div><div class="modal-field-value">${x.timestamp||'-'}</div></div>
     <div class="modal-field"><div class="modal-field-label">风险等级</div><div class="modal-field-value">${riskTag(x.risk_level)} ${x.risk_level}</div></div>
-    <div class="modal-field"><div class="modal-field-label">违规主题</div><div class="modal-field-value">${x.topic||'-'}</div></div>
-    <div class="modal-field"><div class="modal-field-label">处置建议</div><div class="modal-field-value">${handleTag(x.handling_suggestion)}</div></div>
+    <div class="modal-field"><div class="modal-field-label">事件主题</div><div class="modal-field-value">${x.event_topic||x.topic||'-'}</div></div>
+    <div class="modal-field"><div class="modal-field-label">推荐动作</div><div class="modal-field-value">${handleTag(x.recommended_action||x.handling_suggestion)}</div></div>
     <div class="modal-field"><div class="modal-field-label">路由</div><div class="modal-field-value">${routeTag(x.route)}</div></div>
     <div class="modal-field"><div class="modal-field-label">推理延迟</div><div class="modal-field-value">${x.latency_ms} ms</div></div>
     ${x.correlation_analysis?`<div class="modal-field"><div class="modal-field-label">关联分析</div><div class="modal-field-value">${x.correlation_analysis}</div></div>`:''}
-    ${x.judgment_basis?`<div class="modal-field"><div class="modal-field-label">判定依据</div><div class="modal-field-value">${x.judgment_basis}</div></div>`:''}
+    ${x.uncertainty_reason||x.judgment_basis?`<div class="modal-field"><div class="modal-field-label">判定依据</div><div class="modal-field-value">${x.uncertainty_reason||x.judgment_basis}</div></div>`:''}
   `;
   document.getElementById('modalOverlay').classList.add('show');
 }
@@ -379,19 +379,17 @@ function closeModal(e){if(!e||e.target===document.getElementById('modalOverlay')
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 
 // 突发事件检测
-let lastBanRate=0,eventTimer=0;
+let lastEmergencyRate=0,eventTimer=0;
 function detectEvent(c,total){
   if(total<20)return;
-  const br=c.ban_total/total;
+  const er=(c.emergency_total||0)/total;
   const banner=document.getElementById('eventBanner');
-  if(br>0.25&&br>lastBanRate+0.05){
-    banner.textContent='⚡ 检测到封禁率异常飙升 — 疑似代刷团伙或引流机器人批量上线';
+  if(er>0.25&&er>lastEmergencyRate+0.05){
+    banner.textContent='⚡ 检测到紧急复核占比异常飙升 — 疑似热安全/充电异常集中上报';
     banner.className='event-banner show brush';
     clearTimeout(eventTimer);eventTimer=setTimeout(()=>banner.className='event-banner',8000);
-  } else if(c.human_review_total/total>0.2){
-    // 人工复核队列积压提示已移除
   }
-  lastBanRate=br;
+  lastEmergencyRate=er;
 }
 
 // 延迟仪表盘
@@ -482,22 +480,26 @@ async function refresh(){
     document.getElementById('statusDot').className='status-dot';
     document.getElementById('statusText').textContent='系统正常';
     document.getElementById('connectBanner').className='connect-banner';
-    const c=d.counters,total=c.requests_total,violation=c.ban_total+c.limit_total+c.warning_total;
+    const c=d.counters,total=c.requests_total;
+    const riskLike=(c.emergency_total||0)+(c.expert_total||0)+(c.work_order_total||0)+(c.followup_total||0)+(c.collect_evidence_total||0);
+    const infoTotal=c.information_total||0;
+    const midTotal=(c.followup_total||0)+(c.work_order_total||0)+(c.collect_evidence_total||0)+(c.expert_total||0);
+    const emergencyTotal=c.emergency_total||0;
 
     animateNum(document.getElementById('valTotal'),total);
-    animateNum(document.getElementById('valViolation'),violation);
-    animateNum(document.getElementById('valSafe'),c.ignore_total);
-    animateNum(document.getElementById('valHuman'),c.human_review_total);
+    animateNum(document.getElementById('valViolation'),riskLike);
+    animateNum(document.getElementById('valSafe'),infoTotal);
+    animateNum(document.getElementById('valHuman'),c.human_review_total||0);
 
     const qps=total>0?Math.round(total/Math.max(d.uptime_seconds,1)*60):0;
     document.getElementById('subThroughput').textContent=`吞吐: ${qps} 条/分钟`;
-    document.getElementById('subViolation').textContent=`封禁 ${c.ban_total} · 限号 ${c.limit_total} · 警告 ${c.warning_total}`;
+    document.getElementById('subViolation').textContent=`紧急 ${emergencyTotal} · 专家 ${c.expert_total||0} · 工单 ${c.work_order_total||0}`;
     if(total>0){
-      const sr=(c.ignore_total/total*100).toFixed(1);
-      document.getElementById('trendSafe').textContent=`${sr}% 安全率`;
+      const sr=(infoTotal/total*100).toFixed(1);
+      document.getElementById('trendSafe').textContent=`${sr}% 信息回复占比`;
       document.getElementById('trendSafe').className=`kpi-trend ${parseFloat(sr)>70?'trend-good':'trend-bad'}`;
     }
-    document.getElementById('subBanRate').textContent=`封禁率: ${total>0?(c.ban_total/total*100).toFixed(1):0}% (阈值<12%)`;
+    document.getElementById('subBanRate').textContent=`紧急复核率: ${total>0?(emergencyTotal/total*100).toFixed(1):0}% (阈值<12%)`;
 
     // 火花线
     sparkData.push(qps);if(sparkData.length>30)sparkData.shift();
@@ -515,29 +517,34 @@ async function refresh(){
     // 结果列表
     recentCache=d.recent||[];
     if(recentCache.length>0){
-      document.getElementById('resultTable').innerHTML=recentCache.slice(0,10).map((x,i)=>`
+      document.getElementById('resultTable').innerHTML=recentCache.slice(0,10).map((x,i)=>{
+        const tid=(x.case_id||x.ticket_id||'').toString();
+        const action=x.recommended_action||x.handling_suggestion;
+        const topic=x.event_topic||x.topic||'-';
+        return`
         <tr class="${i===0&&total>prevTotal?'new-row':''}" onclick="showDetail(${i})">
           <td style="font-size:11px;color:var(--text-secondary)">${x.timestamp?x.timestamp.slice(11):'-'}</td>
-          <td style="font-family:monospace;font-size:10px;">${x.ticket_id.slice(-10)}</td>
+          <td style="font-family:monospace;font-size:10px;">${tid.slice(-10)}</td>
           <td>${riskTag(x.risk_level)}</td>
-          <td style="font-size:12px;">${x.topic}</td>
-          <td>${handleTag(x.handling_suggestion)}</td>
+          <td style="font-size:12px;">${topic}</td>
+          <td>${handleTag(action)}</td>
           <td>${routeTag(x.route)}</td>
           <td style="font-size:11px;color:var(--text-secondary)">${x.latency_ms}ms</td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
     }
 
     // 图表增量
     if(total>prevTotal){
       const prev=chartData.length>0?chartData[chartData.length-1]._cum:{i:0,w:0,b:0};
-      chartData.push({ignore:c.ignore_total-prev.i,warn:(c.warning_total+c.limit_total)-prev.w,ban:c.ban_total-prev.b,_cum:{i:c.ignore_total,w:c.warning_total+c.limit_total,b:c.ban_total}});
+      chartData.push({ignore:infoTotal-prev.i,warn:midTotal-prev.w,ban:emergencyTotal-prev.b,_cum:{i:infoTotal,w:midTotal,b:emergencyTotal}});
       if(chartData.length>60)chartData.shift();
       saveChartData();
     }
 
     // 比例条
     if(total>0){
-      const ig=(c.ignore_total/total*100).toFixed(1),wl=((c.warning_total+c.limit_total)/total*100).toFixed(1),bn=(c.ban_total/total*100).toFixed(1);
+      const ig=(infoTotal/total*100).toFixed(1),wl=(midTotal/total*100).toFixed(1),bn=(emergencyTotal/total*100).toFixed(1);
       document.getElementById('ratioGreen').style.width=ig+'%';
       document.getElementById('ratioOrange').style.width=wl+'%';
       document.getElementById('ratioRed').style.width=bn+'%';
@@ -550,8 +557,8 @@ async function refresh(){
 
     // 质量守卫
     if(total>=10){
-      const br=c.ban_total/total,pr=c.parse_non_ok_total/total,vr=violation/total;
-      const guards=[{name:`封禁率 ${(br*100).toFixed(1)}%`,pass:br<0.12,th:'<12%'},{name:`解析错误率 ${(pr*100).toFixed(1)}%`,pass:pr<0.05,th:'<5%'},{name:`违规率 ${(vr*100).toFixed(1)}%`,pass:vr<0.5,th:'<50%'}];
+      const br=emergencyTotal/total,pr=(c.parse_non_ok_total||0)/total,vr=riskLike/total;
+      const guards=[{name:`紧急复核率 ${(br*100).toFixed(1)}%`,pass:br<0.12,th:'<12%'},{name:`解析错误率 ${(pr*100).toFixed(1)}%`,pass:pr<0.05,th:'<5%'},{name:`风险事件率 ${(vr*100).toFixed(1)}%`,pass:vr<0.5,th:'<50%'}];
       const ok=guards.every(g=>g.pass);
       document.getElementById('guardBadge').textContent=ok?'全部通过':'告警';
       document.getElementById('guardBadge').style.cssText=ok?'background:#ecfdf5;color:var(--accent-green)':'background:#fef2f2;color:var(--accent-red)';
@@ -573,7 +580,11 @@ async function refresh(){
       document.getElementById('topicBadge').textContent=`${Object.keys(bd).length} 个主题`;
       document.getElementById('topicList').innerHTML=Object.entries(bd).slice(0,13).map(([name,stat],i)=>{
         const pct=(stat.count/tt*100).toFixed(1),color=colors[i%colors.length];
-        const r=stat.risk,h=stat.handling,rT=r.low_risk+r.mid_risk+r.high_risk||1,hT=h.ignore+h.warning+h.limit_account+h.ban_account||1;
+        const r=stat.risk,a=stat.actions||stat.handling||{};
+        const rT=r.low_risk+r.mid_risk+r.high_risk||1;
+        const info=a.information_reply||0,collect=a.collect_more_evidence||0,follow=a.service_followup||0;
+        const wo=a.create_work_order||0,expert=a.expert_review||0,emerg=a.emergency_review||0;
+        const hT=info+collect+follow+wo+expert+emerg||1;
         const uid='td-'+i;
         return`<div class="topic-row"><div class="topic-row-header" onclick="toggleDetail('${uid}')">
           <span class="topic-row-name" title="${name}">${name}</span>
@@ -591,12 +602,12 @@ async function refresh(){
           <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">低 ${r.low_risk} · 中 ${r.mid_risk} · 高 ${r.high_risk}</div>
           <div class="topic-mini-label">处置分布</div>
           <div class="topic-mini-bar">
-            <div style="width:${(h.ignore/hT*100).toFixed(1)}%;background:#4ade80;"></div>
-            <div style="width:${(h.warning/hT*100).toFixed(1)}%;background:#fbbf24;"></div>
-            <div style="width:${(h.limit_account/hT*100).toFixed(1)}%;background:#fb923c;"></div>
-            <div style="width:${(h.ban_account/hT*100).toFixed(1)}%;background:#f87171;"></div>
+            <div style="width:${(info/hT*100).toFixed(1)}%;background:#4ade80;"></div>
+            <div style="width:${((collect+follow)/hT*100).toFixed(1)}%;background:#fbbf24;"></div>
+            <div style="width:${((wo+expert)/hT*100).toFixed(1)}%;background:#fb923c;"></div>
+            <div style="width:${(emerg/hT*100).toFixed(1)}%;background:#f87171;"></div>
           </div>
-          <div style="font-size:10px;color:var(--text-secondary);">忽略 ${h.ignore} · 警告 ${h.warning} · 限号 ${h.limit_account} · 封禁 ${h.ban_account}</div>
+          <div style="font-size:10px;color:var(--text-secondary);">信息 ${info} · 补证/跟进 ${collect+follow} · 工单/专家 ${wo+expert} · 紧急 ${emerg}</div>
         </div></div>`;
       }).join('');
     }
