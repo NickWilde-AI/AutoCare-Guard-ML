@@ -4,13 +4,22 @@ import json
 import re
 from typing import Any
 
-from .schema import AuditLabel, FinalJudgment, HandlingSuggestion, RiskLevel, validate_label
+from .schema import (
+    CaseLabel,
+    EventJudgment,
+    RecommendedAction,
+    RiskLevel,
+    validate_label,
+)
 
 
 ENUM_PATTERNS = {
     "risk_level": r"(low_risk|mid_risk|high_risk)",
-    "final_judgment": r"(not_exist_violation|exist_violation)",
-    "handling_suggestion": r"(ignore|warning|limit_account|ban_account)",
+    "event_judgment": r"(risk_event|not_risk_event|insufficient_evidence)",
+    "recommended_action": (
+        r"(information_reply|collect_more_evidence|service_followup|"
+        r"create_work_order|expert_review|emergency_review)"
+    ),
 }
 
 
@@ -42,15 +51,52 @@ def _extract_json_object(text: str) -> str | None:
     return None
 
 
+def _canonicalize(parsed: dict[str, Any]) -> dict[str, Any]:
+    out = dict(parsed)
+    # 旧字段优先覆盖（即使 default 已填了新字段名）
+    if "topic" in out:
+        out["event_topic"] = out.pop("topic")
+    if "final_judgment" in out:
+        out["event_judgment"] = out.pop("final_judgment")
+    if "handling_suggestion" in out:
+        out["recommended_action"] = out.pop("handling_suggestion")
+    if "judgment_basis" in out and not out.get("uncertainty_reason"):
+        out["uncertainty_reason"] = out.pop("judgment_basis")
+    elif "judgment_basis" in out:
+        out.pop("judgment_basis", None)
+    # legacy enum remap
+    legacy_j = {
+        "exist_violation": EventJudgment.RISK_EVENT.value,
+        "not_exist_violation": EventJudgment.NOT_RISK_EVENT.value,
+    }
+    legacy_a = {
+        "ignore": RecommendedAction.INFORMATION_REPLY.value,
+        "warning": RecommendedAction.SERVICE_FOLLOWUP.value,
+        "limit_account": RecommendedAction.CREATE_WORK_ORDER.value,
+        "ban_account": RecommendedAction.EMERGENCY_REVIEW.value,
+    }
+    if out.get("event_judgment") in legacy_j:
+        out["event_judgment"] = legacy_j[out["event_judgment"]]
+    if out.get("recommended_action") in legacy_a:
+        out["recommended_action"] = legacy_a[out["recommended_action"]]
+    if out.get("event_topic") == "无主题":
+        out["event_topic"] = "无风险事件"
+    out.setdefault("evidence_refs", [])
+    out.setdefault("service_escalation_flags", [])
+    out.setdefault("correlation_analysis", "")
+    out.setdefault("uncertainty_reason", "")
+    return out
+
+
 def parse_judge_output(text: str, strict: bool = False) -> dict[str, Any]:
-    default = AuditLabel.safe_default().to_dict()
+    default = CaseLabel.safe_default().to_dict()
     parsed: dict[str, Any] | None = None
     json_text = _extract_json_object(text)
     if json_text:
         try:
             obj = json.loads(json_text)
             if isinstance(obj, dict):
-                parsed = {**default, **obj}
+                parsed = _canonicalize({**default, **obj})
         except json.JSONDecodeError:
             parsed = None
     if parsed is None:
@@ -59,21 +105,22 @@ def parse_judge_output(text: str, strict: bool = False) -> dict[str, Any]:
             match = re.search(pattern, text)
             if match:
                 parsed[field] = match.group(1)
+        parsed = _canonicalize(parsed)
     errors = validate_label(parsed)
     if errors and strict:
         raise ValueError("; ".join(errors))
     if errors:
-        if parsed.get("handling_suggestion") == HandlingSuggestion.BAN_ACCOUNT.value:
-            parsed["handling_suggestion"] = HandlingSuggestion.LIMIT_ACCOUNT.value
-        if parsed.get("final_judgment") == FinalJudgment.NOT_VIOLATION.value:
+        if parsed.get("recommended_action") == RecommendedAction.EMERGENCY_REVIEW.value:
+            parsed["recommended_action"] = RecommendedAction.EXPERT_REVIEW.value
+        if parsed.get("event_judgment") == EventJudgment.NOT_RISK_EVENT.value:
             parsed["risk_level"] = RiskLevel.LOW.value
-            parsed["handling_suggestion"] = HandlingSuggestion.IGNORE.value
-        # P2-11：exist_violation 不得配 low_risk/ignore，兜底纠为 mid_risk/warning，
-        # 避免"违规结论 + 安全处置"的矛盾组合被静默 auto_close。
-        if parsed.get("final_judgment") == FinalJudgment.VIOLATION.value:
+            parsed["recommended_action"] = RecommendedAction.INFORMATION_REPLY.value
+        if parsed.get("event_judgment") == EventJudgment.INSUFFICIENT_EVIDENCE.value:
+            if parsed.get("recommended_action") == RecommendedAction.EMERGENCY_REVIEW.value:
+                parsed["recommended_action"] = RecommendedAction.COLLECT_MORE_EVIDENCE.value
+        if parsed.get("event_judgment") == EventJudgment.RISK_EVENT.value:
             if parsed.get("risk_level") == RiskLevel.LOW.value:
                 parsed["risk_level"] = RiskLevel.MID.value
-            if parsed.get("handling_suggestion") == HandlingSuggestion.IGNORE.value:
-                parsed["handling_suggestion"] = HandlingSuggestion.WARNING.value
+            if parsed.get("recommended_action") == RecommendedAction.INFORMATION_REPLY.value:
+                parsed["recommended_action"] = RecommendedAction.SERVICE_FOLLOWUP.value
     return parsed
-

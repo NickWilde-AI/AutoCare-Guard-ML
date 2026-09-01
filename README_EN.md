@@ -2,7 +2,7 @@
 
 # AI-IM-Guard-ML
 
-**Sanitized multi-evidence engineering implementation for IM risk review**
+**After-sales vehicle risk judgment and work-order routing (working name: AutoCare-Guard-ML)**
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com/)
@@ -16,45 +16,46 @@
 
 ---
 
-This repository is a sanitized engineering implementation derived from an enterprise IM risk-control project. It focuses on data processing, SFT, offline evaluation, inference serving, and policy routing. Raw business data, production weights, proprietary rules, and the complete production infrastructure are not included.
+This repository is a sanitized engineering implementation derived from a new-energy-vehicle after-sales risk judgment project (working name **AutoCare-Guard-ML**). The repository name `AI-IM-Guard-ML`, Python package `im_guard_ml`, and CLI `im-guard` keep historical naming. It focuses on data processing, SFT, offline evaluation, inference serving, and work-order routing. **It does not include** raw work orders, owner PII, fault-code dictionaries, production model weights, or the complete production infrastructure.
 
 ## Why This Exists
 
-Many content-safety systems stop at a text classifier: `safe` or `unsafe`.
+Many after-sales systems stop at text classification: consult / complaint / escalate.
 
-Real IM risk review is messier. A production system needs to decide:
+Real vehicle risk judgment is messier. A production system needs to decide:
 
-- whether the conversation is actually violating policy;
-- how severe the risk is;
-- whether the right action is ignore, warning, limit, or ban review;
-- whether chat evidence and behavior evidence support each other;
+- whether the service conversation constitutes a vehicle risk event;
+- how severe the risk is (low / mid / high);
+- whether the right action is information reply, evidence collection, service follow-up, work-order creation, expert review, or emergency human confirmation;
+- whether dialogue evidence and vehicle signals / fault evidence / service history support each other;
+- how to avoid treating missing evidence as “normal”;
 - how the decision is audited, monitored, rolled back, and improved.
 
-AI-IM-Guard-ML turns that problem into a structured, reviewable engineering system:
+This repository turns that problem into a structured, reviewable engineering system:
 
 ```text
-IM case
-  -> chat evidence + behavior evidence
+Service case
+  -> conversation + vehicle signals + fault evidence + service history
   -> LLM Judge
-  -> structured risk output
-  -> postprocess guardrails
-  -> policy route
+  -> structured judgment
+  -> postprocess / evidence gates
+  -> work-order routing
   -> audit / metrics / feedback loop
 ```
 
-The public content is a runnable engineering skeleton, not the original production code or a complete replica of an internal environment. Users must supply authorized, redacted data, model weights, and suitable compute.
+The public content is a runnable engineering skeleton, not the original production code. Users must supply authorized, redacted data, model weights, and suitable compute.
 
 ## Highlights
 
 | Area | What is implemented |
 | --- | --- |
-| Multi-evidence review | Chat messages, scenario fields, behavior abnormalities, and structured labels |
+| Multi-evidence judgment | Conversation, vehicle signal summaries, fault evidence, service history, structured labels |
 | LLM Judge | Local rule-based baseline Judge plus Transformers/SFT checkpoint path |
 | Training pipeline | Completion-only SFT, LoRA/PEFT config, public-data field loss masking |
-| Data governance | XGuard public dataset ingestion, conservative label mapping, split/audit checks |
-| Decision safety | JSON parsing fallback, label validation, strong-action guardrails, policy routing |
+| Data governance | Public dataset ingestion, conservative label mapping, split/audit checks |
+| Decision safety | JSON parsing fallback, label validation, emergency-action evidence gates, policy routing |
 | API service | FastAPI, request ID, token/RBAC auth, CORS, rate limits, request-size limits |
-| Auditability | JSONL/SQLite audit backends, ticket lookup, versioned decisions |
+| Auditability | JSONL/SQLite audit backends, case/ticket lookup, versioned decisions |
 | Monitoring | Prometheus metrics, drift reports, sliding-window alerts, SLO documentation |
 | Model governance | Model registry, promotion guardrails, rollback target, approval metadata |
 | Delivery gates | `make enterprise-check`, OpenAPI contract, preflight, readiness checks, CI |
@@ -65,31 +66,31 @@ The public content is a runnable engineering skeleton, not the original producti
 | --- | --- | --- |
 | Engineering framework | Publicly verifiable | CLI, API, data conversion, training entry points, evaluation, monitoring, audit, and deployment templates |
 | Heuristic baseline | Publicly verifiable | Validates parsing, routing, and serving only; it is not a model-quality result |
-| tiny-gpt2 | Pipeline smoke configuration | Validates training code paths only; it does not represent Chinese IM risk quality |
+| tiny-gpt2 | Pipeline smoke configuration | Validates training code paths only; it does not represent after-sales judgment quality |
 | Qwen SFT/LoRA | Code and configuration available | Requires authorized data, weights, and suitable GPU resources |
 | Production integration | Outside the public scope | Production weights, internal data, and complete infrastructure are not public |
 
-The repository does not claim to reproduce internal production metrics or a particular large-model training run.
+The public repository verifies the engineering loop. It does **not** claim to reproduce internal production metrics or a particular large-model training run. Model quality evaluation requires your own redacted data and weights.
 
 ## Architecture
 
 Stable text pipeline:
 
 ```text
-IM review request
-  -> evidence builder
+Service judgment request
+  -> evidence builder (conversation, vehicle signals, faults, service history)
   -> prompt / feature rendering
   -> LLM Judge
   -> JSON parsing
-  -> postprocess guardrails
-  -> policy routing
+  -> postprocess guardrails / evidence gates
+  -> work-order routing
   -> audit store + metrics + feedback loop
 ```
 
 Core layers:
 
 - **Access**: request handling, CLI, schema validation. Key files: `api.py`, `cli.py`, `schema.py`
-- **Evidence**: chat and behavior evidence rendering. Key files: `prompting.py`, `data_audit.py`
+- **Evidence**: conversation / vehicle / fault evidence rendering. Key files: `prompting.py`, `data_audit.py`
 - **Model**: local rule-based baseline, SFT training, checkpoint inference. Key files: `inference.py`, `training.py`
 - **Decision**: JSON recovery, validation, action routing. Key files: `parsing.py`, `postprocess.py`
 - **Governance**: versioning, audit, monitoring, registry. Key files: `versioning.py`, `audit_store.py`, `monitoring.py`, `model_registry.py`
@@ -122,16 +123,25 @@ Run the API:
 PYTHONPATH=src im-guard --config configs/default.yaml serve --port 8000
 ```
 
-Submit a review request:
+Submit a judgment request (AutoCare fields; legacy `ticket_id` / `chat_evidence_list` remain compatible):
 
 ```bash
 curl -X POST http://127.0.0.1:8000/judge \
   -H "Content-Type: application/json" \
   -H "X-Request-ID: local-run-1" \
   -d '{
-    "ticket_id": "local-run-1",
-    "chat_evidence_list": ["加微信稳赚，带你投资。"],
-    "behavior_abnormal_list": ["短时间高频私聊。"]
+    "case_id": "local-run-1",
+    "conversation_evidence": [
+      {"role": "owner", "text": "Charging smell of burning; HV alert on the screen."}
+    ],
+    "vehicle_signal_summary": {
+      "motion_state": "charging",
+      "alert_summary": ["high_voltage_alert"],
+      "thermal_status": "abnormal_rise"
+    },
+    "fault_evidence": [
+      {"domain": "hv_system", "severity": "critical", "count": 2}
+    ]
   }'
 ```
 
@@ -143,22 +153,24 @@ curl http://127.0.0.1:8000/metrics
 
 ## Output Contract
 
-The Judge returns a structured review result instead of a single binary label:
+The Judge returns a structured judgment instead of a single binary label:
 
 ```json
 {
   "risk_level": "low_risk | mid_risk | high_risk",
-  "topic": "business risk topic",
-  "correlation_analysis": "semantic-behavior evidence correlation",
-  "final_judgment": "exist_violation | not_exist_violation",
-  "judgment_basis": "decision basis with evidence references",
-  "handling_suggestion": "ignore | warning | limit_account | ban_account",
-  "route": "auto_close | auto_action | policy_action | human_review_required",
-  "final_action": "ignore | send_warning | limit_account_candidate | review_before_ban"
+  "event_topic": "vehicle risk topic",
+  "event_judgment": "risk_event | not_risk_event | insufficient_evidence",
+  "recommended_action": "information_reply | collect_more_evidence | service_followup | create_work_order | expert_review | emergency_review",
+  "evidence_refs": [{"source": "conversation_evidence|vehicle_signal_summary|fault_evidence|...", "index": 0, "field": "..."}],
+  "correlation_analysis": "dialogue-vehicle evidence correlation",
+  "uncertainty_reason": "missing or conflicting evidence explanation",
+  "service_escalation_flags": ["repeated_complaint | unresolved_service_case | public_opinion_risk"],
+  "route": "information_flow | collect_evidence | service_queue | work_order_queue | review_queue | fallback_or_review",
+  "final_action": "information_reply_candidate | request_more_evidence | ... | await_human_confirmation"
 }
 ```
 
-High-impact actions are treated as review recommendations. The system includes postprocess guardrails and routing logic so model output is not blindly treated as irreversible enforcement.
+High-impact actions such as `emergency_review` are treated as review recommendations, not irreversible enforcement. The system includes vehicle-side evidence gates and routing so model output is not blindly executed; the model never controls the vehicle directly.
 
 ## Training
 
@@ -204,8 +216,8 @@ PYTHONPATH=src im-guard --config configs/default.yaml \
 Training design:
 
 - completion-only SFT: loss is applied to the assistant JSON output, not the user prompt;
-- public-data field masking: public binary safety data does not teach `risk_level` or `handling_suggestion`;
-- conservative public labels: public violations are capped at `mid_risk / warning`;
+- public-data field masking: public binary safety data does not teach full `risk_level` / `recommended_action` (especially not `emergency_review` / `expert_review`);
+- conservative public labels: public violations are capped at mid-risk and service-follow-up-style actions;
 - LoRA/PEFT support: configured from YAML;
 - Qwen-style prompt rendering: aligned with the inference path.
 
@@ -215,14 +227,14 @@ The engineering loop is now working. The next step is model quality, not more fe
 
 | Step | Goal |
 | --- | --- |
-| Rent GPU capacity | Finalized config (2026-08-18): Qwen3-32B LoRA multi-task SFT, prefer multi-GPU 80GB-class hardware; local smoke runs use tiny-gpt2 / Qwen2.5-0.5B |
+| Rent GPU capacity | Unified config: Qwen3-32B LoRA multi-task SFT, prefer multi-GPU 80GB-class hardware; local smoke runs use tiny-gpt2 / Qwen2.5-0.5B |
 | Fix validation data | Keep stable `val/test` splits so metrics are not inflated |
 | Train Qwen checkpoint | Use `Qwen/Qwen3-32B` with LoRA multi-task SFT (r=16 / alpha=32 / q,k,v,o_proj / lr=1e-4 / 2 epochs / global batch 64) |
-| Evaluate rigorously | Report `final_judgment F1`, `risk_level macro-F1`, `handling macro-F1`, `ban_account FPR` |
-| Analyze errors | Focus on false bans, missed violations, strong-action mistakes, and `mid_risk` gray cases |
+| Evaluate rigorously | Report `event_judgment` F1, `risk_level` macro-F1, `recommended_action` macro-F1, `emergency_review` FPR, critical-event recall |
+| Analyze errors | Focus on false emergencies, missed risk events, strong-action mistakes, and `mid_risk` / `insufficient_evidence` gray cases |
 | Feed back hard cases | Convert mistakes into refinement samples and rerun training |
 
-Public XGuard data is useful for safety-recognition coverage. Strong actions such as `limit_account` and `ban_account` should come from reviewed IM-like samples, not raw public binary safety data.
+Public safety data is useful for recognition coverage. Strong actions such as `expert_review` and `emergency_review` should come from reviewed after-sales / vehicle samples, not raw public binary safety data.
 
 ## Enterprise Checks
 
@@ -245,7 +257,7 @@ GitHub Actions runs the same checks on push and pull request. Refer to the CI ru
 ├── deploy/                  # Docker, vLLM, env templates, deployment examples
 ├── docs/                    # architecture, operations, training, governance docs
 ├── scripts/                 # dataset download and API benchmark scripts
-├── src/im_guard_ml/         # core Python package
+├── src/im_guard_ml/         # core Python package (historical name)
 ├── tests/                   # unit, contract, readiness, and governance tests
 ├── Makefile
 ├── pyproject.toml
@@ -271,7 +283,7 @@ GitHub Actions runs the same checks on push and pull request. Refer to the CI ru
 
 This repository includes public-data ingestion, training code, API serving, audit logs, monitoring, deployment templates, and governance checks. For real business rollout, teams usually connect or replace:
 
-- private IM labels, appeals, review tickets, and online feedback samples;
+- private after-sales labels, work-order feedback, safety-review samples, and online feedback loops;
 - a formally trained and evaluated Qwen or comparable model checkpoint;
 - enterprise gateway, secret rotation, centralized audit warehouse, and human-review platform;
 - online canary, A/B testing, rollback, and continuous monitoring workflows.

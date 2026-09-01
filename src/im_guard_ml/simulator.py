@@ -509,8 +509,29 @@ def generate_case(event: str | None = None) -> dict:
 
     ticket_id = f"im-audit-{time.strftime('%Y%m%d-%H%M%S')}-{random.randint(1000, 9999)}"
 
+    # 同时输出 AutoCare 字段名与旧 IM 兼容字段，便于 /judge 与演示链路共用
     return {
+        "case_id": ticket_id,
         "ticket_id": ticket_id,
+        "service_context": {
+            "chat_type": "IM私聊",
+            "user_intimacy": intimacy,
+            "user_profile": profile,
+            "behavior_key_summary": {
+                "login_behavior": login,
+                "search_behavior": "搜索UID。" if category in ("fraud", "brush") else "无搜索行为。",
+                "follow_behavior": random.choice(["互关。", "单向关注。", "无关注。"]),
+                "enter_room_behavior": random.choice(["近30日频繁进房。", "偶尔进房。", "首次进房。", "短时间内连续进入多个房间。"]),
+                "mic_interact_behavior": random.choice(["无互动。", "偶尔连麦。", "频繁连麦。"]),
+                "t_bean_consume": "极大额消费。" if gift_value > 10000 else "大额消费。" if gift_value > 5000 else "中等额度消费。" if gift_value > 500 else "少量消费。" if gift_value > 0 else "无消费。",
+                "reward_behavior": "持续高频大额打赏，旨在推高榜单。" if gift_value > 10000 else "大额打赏。" if gift_value > 5000 else "礼物记录稳定，无突发尖峰。" if gift_value > 0 else "无礼物记录。",
+                "gift_total_value": gift_value,
+                "gift_total_count": max(1, gift_value // random.randint(500, 3000)) if gift_value > 0 else 0,
+            },
+        },
+        "conversation_evidence": evidence,
+        "fault_evidence": abnormals,
+        # 兼容旧字段
         "audit_scene": {
             "chat_type": "IM私聊",
             "user_intimacy": intimacy,
@@ -611,13 +632,16 @@ async def _async_run(host: str, port: int, interval: float, concurrency: int):
 
                 counter["n"] += 1
                 risk = result.get("risk_level", "?")
-                topic = result.get("topic", "?")
-                action = result.get("handling_suggestion", "?")
+                topic = result.get("event_topic") or result.get("topic", "?")
+                action = (
+                    result.get("recommended_action")
+                    or result.get("handling_suggestion", "?")
+                )
                 route = result.get("route", "?")
                 risk_icon = {"high_risk": "🔴", "mid_risk": "🟡", "low_risk": "🟢"}.get(risk, "⚪")
                 event_tag = f" ⚡{event}" if event else ""
                 print(
-                    f"[{counter['n']:04d}] {risk_icon} {case['ticket_id'][-15:]} │ "
+                    f"[{counter['n']:04d}] {risk_icon} {case.get('case_id', case.get('ticket_id', ''))[-15:]} │ "
                     f"{risk:<10} {topic:<12} {action:<14} {route}{event_tag}"
                 )
             except Exception as e:

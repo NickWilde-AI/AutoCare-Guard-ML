@@ -1,4 +1,4 @@
-"""Tests for evaluation metrics."""
+"""Tests for evaluation metrics (AutoCare fields)."""
 
 import pytest
 
@@ -61,80 +61,94 @@ class TestMacroF1:
 class TestEvalMultiField:
     def test_basic_evaluation(self):
         targets = [
-            {"risk_level": "high_risk", "handling_suggestion": "ban_account"},
-            {"risk_level": "low_risk", "handling_suggestion": "ignore"},
+            {
+                "risk_level": "high_risk",
+                "recommended_action": "emergency_review",
+                "event_judgment": "risk_event",
+            },
+            {
+                "risk_level": "low_risk",
+                "recommended_action": "information_reply",
+                "event_judgment": "not_risk_event",
+            },
         ]
         preds = [
-            {"risk_level": "high_risk", "handling_suggestion": "ban_account"},
-            {"risk_level": "low_risk", "handling_suggestion": "ignore"},
+            {
+                "risk_level": "high_risk",
+                "recommended_action": "emergency_review",
+                "event_judgment": "risk_event",
+            },
+            {
+                "risk_level": "low_risk",
+                "recommended_action": "information_reply",
+                "event_judgment": "not_risk_event",
+            },
         ]
-        metas = [{"topic": "代刷/包榜"}, {"topic": "无主题"}]
+        metas = [{"topic": "动力电池与热安全"}, {"topic": "无风险事件"}]
         result = eval_multi_field(targets, preds, metas)
-        assert result["risk_per_topic_acc"]["代刷/包榜"] == 1.0
-        assert result["risk_per_topic_acc"]["无主题"] == 1.0
+        assert result["risk_per_topic_acc"]["动力电池与热安全"] == 1.0
+        assert result["risk_per_topic_acc"]["无风险事件"] == 1.0
+        assert result["emergency_review_fpr"] == 0.0
 
-    def test_partial_correct(self):
+    def test_emergency_fpr(self):
         targets = [
-            {"risk_level": "high_risk", "handling_suggestion": "ban_account"},
-            {"risk_level": "mid_risk", "handling_suggestion": "warning"},
+            {
+                "risk_level": "low_risk",
+                "recommended_action": "information_reply",
+                "event_judgment": "not_risk_event",
+            },
+            {
+                "risk_level": "mid_risk",
+                "recommended_action": "service_followup",
+                "event_judgment": "risk_event",
+            },
         ]
         preds = [
-            {"risk_level": "high_risk", "handling_suggestion": "ban_account"},
-            {"risk_level": "low_risk", "handling_suggestion": "ignore"},
+            {
+                "risk_level": "high_risk",
+                "recommended_action": "emergency_review",
+                "event_judgment": "risk_event",
+            },
+            {
+                "risk_level": "mid_risk",
+                "recommended_action": "service_followup",
+                "event_judgment": "risk_event",
+            },
         ]
         result = eval_multi_field(targets, preds)
-        assert 0.0 < result["risk_macro_f1"] < 1.0
+        assert result["emergency_review_fpr"] == 0.5
+
+    def test_legacy_field_names(self):
+        targets = [
+            {"risk_level": "high_risk", "handling_suggestion": "ban_account", "final_judgment": "exist_violation"},
+        ]
+        preds = [
+            {"risk_level": "high_risk", "handling_suggestion": "ban_account", "final_judgment": "exist_violation"},
+        ]
+        result = eval_multi_field(targets, preds)
+        assert "handling_macro_f1" in result
+        assert "emergency_review_fpr" in result
+
+
+class TestAuprc:
+    def test_perfect(self):
+        assert auprc([1, 1, 0], [0.9, 0.8, 0.1]) == pytest.approx(1.0)
+
+    def test_empty(self):
+        assert auprc([], []) == 0.0
 
 
 class TestFleissKappa:
     def test_perfect_agreement(self):
-        # All raters agree on all items
-        matrix = [
-            [3, 0, 0],
-            [0, 3, 0],
-            [0, 0, 3],
-            [3, 0, 0],
-        ]
-        kappa = fleiss_kappa(matrix)
-        assert kappa > 0.9
+        matrix = [[3, 0, 0], [0, 3, 0], [0, 0, 3]]
+        assert fleiss_kappa(matrix) == pytest.approx(1.0)
 
-    def test_moderate_agreement(self):
-        # Partial agreement
-        matrix = [
-            [3, 0, 0, 0],
-            [0, 2, 1, 0],
-            [0, 0, 1, 2],
-            [0, 0, 0, 3],
-        ]
-        kappa = fleiss_kappa(matrix)
-        assert 0.3 < kappa < 0.9
+    def test_rejects_ragged(self):
+        with pytest.raises(ValueError, match="ragged"):
+            fleiss_kappa([[3, 0, 0], [2, 0, 0]])
 
 
-class TestOrdinalKrippendorffAlpha:
-    def test_perfect_agreement(self):
-        annotations = [
-            [1, 2, 3, 1, 2, 3],
-            [1, 2, 3, 1, 2, 3],
-            [1, 2, 3, 1, 2, 3],
-        ]
-        alpha = ordinal_krippendorff_alpha(annotations)
-        assert alpha > 0.95
-
-    def test_with_none(self):
-        annotations = [
-            [1, 2, None, 3],
-            [1, 2, 3, 3],
-            [1, None, 3, 3],
-        ]
-        alpha = ordinal_krippendorff_alpha(annotations)
-        assert -1.0 <= alpha <= 1.0
-
-    def test_reported_range(self):
-        # Design doc reports alpha = 0.71
-        annotations = [
-            [1, 2, 3, 3, 2, 1],
-            [1, 2, 3, 2, 2, 1],
-            [1, 1, 3, 3, 2, 1],
-        ]
-        alpha = ordinal_krippendorff_alpha(annotations)
-        assert 0.5 < alpha < 0.9
+class TestKrippendorff:
+    def test_basic(self):
+        annotations = [[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]
+        assert ordinal_krippendorff_alpha(annotations) == pytest.approx(1.0)

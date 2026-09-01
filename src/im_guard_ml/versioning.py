@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+try:
+    from datetime import UTC, datetime
+except ImportError:  # Python < 3.11
+    from datetime import datetime, timezone
+    UTC = timezone.utc
 from typing import Any
 
 from .privacy import build_input_summary

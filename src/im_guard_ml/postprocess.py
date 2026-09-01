@@ -4,7 +4,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from .parsing import parse_judge_output
-from .schema import FinalJudgment, HandlingSuggestion, RiskLevel, TOPICS, validate_label
+from .schema import (
+    EVENT_TOPICS,
+    EventJudgment,
+    RecommendedAction,
+    RiskLevel,
+    ServiceCase,
+    validate_label,
+)
 
 
 @dataclass(slots=True)
@@ -14,6 +21,10 @@ class PostprocessResult:
     validation_errors: list[str]
     route: str
     final_action: str
+    requires_human_review: bool
+    review_role_hint: str
+    review_priority: str
+    policy_reasons: list[str]
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -22,6 +33,10 @@ class PostprocessResult:
             "validation_errors": self.validation_errors,
             "route": self.route,
             "final_action": self.final_action,
+            "requires_human_review": self.requires_human_review,
+            "review_role_hint": self.review_role_hint,
+            "review_priority": self.review_priority,
+            "policy_reasons": self.policy_reasons,
         }
 
 
@@ -31,83 +46,142 @@ def postprocess_model_output(raw_output: str, case: dict[str, Any] | None = None
 
 
 def postprocess_prediction(parsed: dict[str, Any], case: dict[str, Any] | None = None) -> PostprocessResult:
-    """对已解析的预测 dict 执行校验、纠错与路由（服务层统一入口，P1-01）。
+    """对已解析的预测 dict 执行校验、纠错与策略路由。
 
-    /judge 与 CLI predict 都必须经过本函数，保证 ban 三重保护与
-    parse_status 可观测性在生产路径生效，而不是只在测试里生效。
+    requires_human_review / route / final_action 由策略层生成，模型无最终解释权。
     """
-    errors = validate_label(parsed)
-    errors.extend(_input_sensitive_errors(parsed, case or {}))
+    case = case or {}
+    errors = validate_label(parsed, case)
+    errors.extend(_input_sensitive_errors(parsed, case))
     parse_status = "ok" if not errors else "corrected"
-    corrected = _correct_for_production(parsed, errors)
-    route, final_action = route_policy(corrected, case or {}, errors)
+    corrected = _correct_for_production(parsed, errors, case)
+    route, final_action, requires_human, role_hint, priority, reasons = route_policy(
+        corrected, case, errors
+    )
     return PostprocessResult(
         parsed_output=corrected,
         parse_status=parse_status,
         validation_errors=errors,
         route=route,
         final_action=final_action,
+        requires_human_review=requires_human,
+        review_role_hint=role_hint,
+        review_priority=priority,
+        policy_reasons=reasons,
     )
 
 
-def route_policy(label: dict[str, Any], case: dict[str, Any] | None = None, errors: list[str] | None = None) -> tuple[str, str]:
+def route_policy(
+    label: dict[str, Any],
+    case: dict[str, Any] | None = None,
+    errors: list[str] | None = None,
+) -> tuple[str, str, bool, str, str, list[str]]:
     errors = errors or []
+    case = case or {}
+    reasons: list[str] = []
+    action = label.get("recommended_action")
+    judgment = label.get("event_judgment")
+    flags = label.get("service_escalation_flags") or []
+
     if errors:
-        if label.get("handling_suggestion") == HandlingSuggestion.BAN_ACCOUNT.value:
-            return "human_review_required", "review_before_ban"
-        return "fallback_or_review", "defer_to_rule_engine"
-    suggestion = label.get("handling_suggestion")
-    if suggestion == HandlingSuggestion.IGNORE.value:
-        return "auto_close", "ignore"
-    if suggestion == HandlingSuggestion.WARNING.value:
-        return "auto_action", "send_warning"
-    if suggestion == HandlingSuggestion.LIMIT_ACCOUNT.value:
-        return "policy_action", "limit_account_candidate"
-    if suggestion == HandlingSuggestion.BAN_ACCOUNT.value:
-        return "human_review_required", "review_before_ban"
-    return "fallback_or_review", "defer_to_rule_engine"
+        reasons.extend(errors)
+        if action == RecommendedAction.EMERGENCY_REVIEW.value:
+            return (
+                "review_queue",
+                "await_human_confirmation",
+                True,
+                "safety_reviewer",
+                "urgent",
+                reasons + ["emergency_candidate_with_validation_errors"],
+            )
+        return (
+            "fallback_or_review",
+            "defer_to_rule_engine",
+            True,
+            "technical_expert",
+            "high",
+            reasons,
+        )
+
+    if action == RecommendedAction.INFORMATION_REPLY.value:
+        role = "service_manager" if flags else "technical_expert"
+        return "information_flow", "information_reply_candidate", bool(flags), role, "normal", reasons
+    if action == RecommendedAction.COLLECT_MORE_EVIDENCE.value:
+        return (
+            "collect_evidence",
+            "request_more_evidence",
+            False,
+            "technical_expert",
+            "normal",
+            reasons,
+        )
+    if action == RecommendedAction.SERVICE_FOLLOWUP.value:
+        return "service_queue", "service_followup_candidate", False, "technical_expert", "normal", reasons
+    if action == RecommendedAction.CREATE_WORK_ORDER.value:
+        return "work_order_queue", "create_work_order_candidate", False, "technical_expert", "normal", reasons
+    if action == RecommendedAction.EXPERT_REVIEW.value:
+        return "review_queue", "await_expert_review", True, "technical_expert", "high", reasons
+    if action == RecommendedAction.EMERGENCY_REVIEW.value:
+        return (
+            "review_queue",
+            "await_human_confirmation",
+            True,
+            "safety_reviewer",
+            "urgent",
+            reasons + ["emergency_review_gated"],
+        )
+    if judgment == EventJudgment.INSUFFICIENT_EVIDENCE.value:
+        return (
+            "collect_evidence",
+            "request_more_evidence",
+            False,
+            "technical_expert",
+            "normal",
+            reasons,
+        )
+    return "fallback_or_review", "defer_to_rule_engine", True, "technical_expert", "high", reasons
 
 
-def _correct_for_production(label: dict[str, Any], errors: list[str]) -> dict[str, Any]:
+def _correct_for_production(
+    label: dict[str, Any], errors: list[str], case: dict[str, Any]
+) -> dict[str, Any]:
     corrected = dict(label)
-    if corrected.get("topic") not in TOPICS:
-        corrected["topic"] = "无主题"
-    if corrected.get("final_judgment") == FinalJudgment.NOT_VIOLATION.value:
+    if corrected.get("event_topic") not in EVENT_TOPICS:
+        corrected["event_topic"] = "无风险事件"
+
+    if corrected.get("event_judgment") == EventJudgment.NOT_RISK_EVENT.value:
         corrected["risk_level"] = RiskLevel.LOW.value
-        corrected["handling_suggestion"] = HandlingSuggestion.IGNORE.value
-    if corrected.get("handling_suggestion") == HandlingSuggestion.BAN_ACCOUNT.value:
-        if corrected.get("risk_level") != RiskLevel.HIGH.value or corrected.get("final_judgment") != FinalJudgment.VIOLATION.value:
-            corrected["handling_suggestion"] = HandlingSuggestion.LIMIT_ACCOUNT.value
-    if errors and "behavior evidence missing for ban_account" in errors:
-        corrected["handling_suggestion"] = HandlingSuggestion.LIMIT_ACCOUNT.value
+        if corrected.get("recommended_action") not in {
+            RecommendedAction.INFORMATION_REPLY.value,
+            RecommendedAction.SERVICE_FOLLOWUP.value,
+        }:
+            corrected["recommended_action"] = RecommendedAction.INFORMATION_REPLY.value
+
+    if corrected.get("event_judgment") == EventJudgment.INSUFFICIENT_EVIDENCE.value:
+        if corrected.get("recommended_action") == RecommendedAction.EMERGENCY_REVIEW.value:
+            corrected["recommended_action"] = RecommendedAction.COLLECT_MORE_EVIDENCE.value
+
+    if corrected.get("recommended_action") == RecommendedAction.EMERGENCY_REVIEW.value:
+        if (
+            corrected.get("risk_level") != RiskLevel.HIGH.value
+            or corrected.get("event_judgment") != EventJudgment.RISK_EVENT.value
+        ):
+            corrected["recommended_action"] = RecommendedAction.EXPERT_REVIEW.value
+        elif any("vehicle-side evidence missing" in e for e in errors):
+            corrected["recommended_action"] = RecommendedAction.EXPERT_REVIEW.value
     return corrected
 
 
-# 构成 ban 行为证据的异常信号（P2-12：普通描述如"本机登录。"不算证据）。
-_BAN_BEHAVIOR_MARKERS = ("极大额", "大额", "高频", "异地", "批量", "短时间")
-_BAN_MIN_GIFT_VALUE = 5000.0
-
-
 def _input_sensitive_errors(label: dict[str, Any], case: dict[str, Any]) -> list[str]:
+    """紧急动作证据门禁：无车辆侧证据不得仅凭文本进入 emergency_review。"""
     errors: list[str] = []
-    if label.get("handling_suggestion") == HandlingSuggestion.BAN_ACCOUNT.value:
-        behavior_abnormal = case.get("behavior_abnormal_list") or []
-        summary = case.get("audit_scene", {}).get("behavior_key_summary", {})
-        gift_value = _as_float(summary.get("gift_total_value"))
-        signal_text = f"{summary.get('reward_behavior', '')} {summary.get('login_behavior', '')}"
-        has_behavior = (
-            bool(behavior_abnormal)
-            or (gift_value is not None and gift_value >= _BAN_MIN_GIFT_VALUE)
-            or any(marker in signal_text for marker in _BAN_BEHAVIOR_MARKERS)
-        )
-        if not has_behavior:
-            errors.append("behavior evidence missing for ban_account")
+    if label.get("recommended_action") != RecommendedAction.EMERGENCY_REVIEW.value:
+        return errors
+    service_case = ServiceCase.from_dict(case)
+    if not service_case.has_vehicle_side_evidence():
+        errors.append("vehicle-side evidence missing for emergency_review")
+    # high-risk / emergency 应至少有一条 evidence_refs
+    refs = label.get("evidence_refs") or []
+    if not refs:
+        errors.append("emergency_review requires at least one evidence_ref")
     return errors
-
-
-def _as_float(value: Any) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-

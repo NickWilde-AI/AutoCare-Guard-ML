@@ -45,8 +45,11 @@ def stratified_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     for row in rows:
         label = row.get("label", {})
         source = row.get("source", "unknown")
-        topic = label.get("topic", "无主题")
-        final = label.get("final_judgment", "unknown")
+        topic = label.get("event_topic") or label.get("topic", "无风险事件")
+        final = (
+            label.get("event_judgment")
+            or label.get("final_judgment", "unknown")
+        )
         summary["by_source"][source] = summary["by_source"].get(source, 0) + 1
         summary["by_topic"][topic] = summary["by_topic"].get(topic, 0) + 1
         summary["by_label"][final] = summary["by_label"].get(final, 0) + 1

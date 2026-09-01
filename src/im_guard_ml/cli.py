@@ -161,9 +161,22 @@ def main(argv: list[str] | None = None) -> int:
         rows = read_jsonl(args.pred_jsonl)
         gold = [row["label"] for row in rows if "label" in row and "prediction" in row]
         pred = [row["prediction"] for row in rows if "label" in row and "prediction" in row]
-        metas = [{"topic": row.get("label", {}).get("topic", "unknown")} for row in rows if "label" in row and "prediction" in row]
-        binary_targets = [1 if x["final_judgment"] == "exist_violation" else 0 for x in gold]
-        binary_preds = [1 if x["final_judgment"] == "exist_violation" else 0 for x in pred]
+        metas = [
+            {
+                "event_topic": (
+                    row.get("label", {}).get("event_topic")
+                    or row.get("label", {}).get("topic", "unknown")
+                )
+            }
+            for row in rows
+            if "label" in row and "prediction" in row
+        ]
+        def _is_risk(x: dict) -> bool:
+            j = x.get("event_judgment") or x.get("final_judgment")
+            return j in {"risk_event", "exist_violation"}
+
+        binary_targets = [1 if _is_risk(x) else 0 for x in gold]
+        binary_preds = [1 if _is_risk(x) else 0 for x in pred]
         result = {
             "binary": eval_binary(binary_targets, binary_preds),
             "multi_field": eval_multi_field(gold, pred, metas),

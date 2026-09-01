@@ -4,52 +4,54 @@ rollout:
     shadow:
       traffic_percent: 1
       model_actions: ["log_only"]
-      ban_requires_human_review: true
+      emergency_requires_human_review: true
       rollback_on_alert: true
     small:
       traffic_percent: 10
-      model_actions: ["ignore", "warning", "limit_account_candidate"]
-      ban_requires_human_review: true
+      model_actions: ["information_reply", "collect_more_evidence", "service_followup", "create_work_order_candidate"]
+      emergency_requires_human_review: true
       rollback_on_alert: true
     ramp:
       traffic_percent: 50
-      model_actions: ["ignore", "warning", "limit_account_candidate"]
-      ban_requires_human_review: true
+      model_actions: ["information_reply", "collect_more_evidence", "service_followup", "create_work_order_candidate"]
+      emergency_requires_human_review: true
       rollback_on_alert: true
     full:
       traffic_percent: 100
-      model_actions: ["ignore", "warning", "limit_account_candidate"]
-      ban_requires_human_review: true
+      model_actions: ["information_reply", "collect_more_evidence", "service_followup", "create_work_order_candidate"]
+      emergency_requires_human_review: true
       rollback_on_alert: true
 
 ab_test:
   enabled: false
   # 与 configs/model_registry.yaml 的 current_stable 保持一致。
   control_model_version: heuristic-public-v0
-  # 下一真实模型占位名（与 public 仓库的 heuristic-public-v0 命名风格不同是有意的）。
-  candidate_model_version: im-audit-judge-next
+  # 下一真实模型占位名。
+  candidate_model_version: autocare-risk-judge-next
   split_percent_candidate: 10
   success_metrics:
-    - final_judgment_f1
+    - event_judgment_f1
     - handling_macro_f1
-    - ban_account_fpr
+    - emergency_review_fpr
     - human_review_overturn_rate
   guardrails:
-    # ban_account_fpr 是"gold 非违规中被误判 ban 的比例"红线（0.03），
-    # 与 default.yaml alert_thresholds 的 ban_account_rate（ban 占全部请求比例
-    # 的告警阈值）分母口径不同，勿混用（P2-45）。
-    ban_account_fpr_max: 0.03
+    # emergency_review_fpr 是"gold 非紧急中被误判 emergency 的比例"红线（0.03），
+    # 与 default.yaml alert_thresholds 的 emergency_review_rate（占全部请求比例）
+    # 分母口径不同，勿混用。
+    emergency_review_fpr_max: 0.03
     parse_non_ok_rate_max: 0.02
     p95_latency_ms_max: 1200
 
 human_review:
   required_routes:
+    - review_queue
     - human_review_required
-  required_handling_suggestions:
-    - ban_account
+  required_recommended_actions:
+    - emergency_review
+    - expert_review
   sample_policy:
-    limit_account_sample_rate: 0.2
-    warning_sample_rate: 0.02
+    create_work_order_sample_rate: 0.2
+    service_followup_sample_rate: 0.02
   review_sla_minutes:
     high_risk: 30
     mid_risk: 240

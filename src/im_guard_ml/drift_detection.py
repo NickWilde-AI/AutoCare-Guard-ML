@@ -228,7 +228,13 @@ def detect_drift(
     tests: list[DriftTestResult] = []
 
     # 1. Chi-square tests on categorical prediction distributions
-    for field_name in ("risk_level", "final_judgment", "handling_suggestion"):
+    for field_name in (
+        "risk_level",
+        "event_judgment",
+        "recommended_action",
+        "final_judgment",
+        "handling_suggestion",
+    ):
         cur_dist = current_report.get("prediction_distribution", {}).get(field_name, {})
         base_dist = baseline_report.get("prediction_distribution", {}).get(field_name, {})
 
@@ -265,7 +271,7 @@ def detect_drift(
     cur_input = current_report.get("input_distribution", {})
     base_input = baseline_report.get("input_distribution", {})
 
-    for field_name in ("gift_total_value",):
+    for field_name in ("missing_vehicle_evidence", "gift_total_value"):
         cur_stats = cur_input.get(field_name, {})
         base_stats = base_input.get(field_name, {})
 

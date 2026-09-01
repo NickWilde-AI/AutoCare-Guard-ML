@@ -3,6 +3,7 @@ __pycache__/
 .DS_Store
 .pytest_cache/
 .venv/
+.idea/
 outputs/
 data/train/
 data/raw/

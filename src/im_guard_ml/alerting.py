@@ -5,14 +5,14 @@ from typing import Any
 
 
 DEFAULT_THRESHOLDS = {
-    "ban_account_rate_warn": 0.08,
-    "ban_account_rate_critical": 0.12,
+    "emergency_review_rate_warn": 0.05,
+    "emergency_review_rate_critical": 0.08,
     "parse_non_ok_rate_warn": 0.005,
     "parse_non_ok_rate_critical": 0.02,
-    "empty_behavior_rate_warn": 0.05,
-    "empty_behavior_rate_critical": 0.15,
-    "gift_total_value_mean_delta_warn": 1000.0,
-    "gift_total_value_mean_delta_critical": 3000.0,
+    "missing_vehicle_evidence_rate_warn": 0.08,
+    "missing_vehicle_evidence_rate_critical": 0.20,
+    "missing_vehicle_evidence_mean_delta_warn": 0.08,
+    "missing_vehicle_evidence_mean_delta_critical": 0.20,
 }
 
 
@@ -42,11 +42,11 @@ def evaluate_alerts(report: dict[str, Any], thresholds: dict[str, float] | None 
     alerts: list[Alert] = []
     alerts.extend(
         _threshold_alert(
-            "ban_account_rate",
-            float(guards.get("ban_account_rate", 0.0)),
-            thresholds["ban_account_rate_warn"],
-            thresholds["ban_account_rate_critical"],
-            "ban 占比异常，需检查风险分布、上游特征和处置策略。",
+            "emergency_review_rate",
+            float(guards.get("emergency_review_rate", 0.0)),
+            thresholds["emergency_review_rate_warn"],
+            thresholds["emergency_review_rate_critical"],
+            "emergency_review 占比异常，需检查车辆证据门禁与高风险分布。",
         )
     )
     alerts.extend(
@@ -60,21 +60,21 @@ def evaluate_alerts(report: dict[str, Any], thresholds: dict[str, float] | None 
     )
     alerts.extend(
         _threshold_alert(
-            "empty_behavior_rate",
-            float(guards.get("empty_behavior_rate", 0.0)),
-            thresholds["empty_behavior_rate_warn"],
-            thresholds["empty_behavior_rate_critical"],
-            "行为字段缺失率升高，需检查行为特征服务。",
+            "missing_vehicle_evidence_rate",
+            float(guards.get("missing_vehicle_evidence_rate", 0.0)),
+            thresholds["missing_vehicle_evidence_rate_warn"],
+            thresholds["missing_vehicle_evidence_rate_critical"],
+            "车辆侧证据缺失率升高，需检查信号/故障接入。",
         )
     )
     if diff:
         alerts.extend(
             _abs_delta_alert(
-                "gift_total_value_mean_delta",
-                float(diff.get("gift_total_value_mean_delta", 0.0)),
-                thresholds["gift_total_value_mean_delta_warn"],
-                thresholds["gift_total_value_mean_delta_critical"],
-                "礼物金额均值相对 baseline 漂移，需检查消费特征分布。",
+                "missing_vehicle_evidence_mean_delta",
+                float(diff.get("missing_vehicle_evidence_mean_delta", 0.0)),
+                thresholds["missing_vehicle_evidence_mean_delta_warn"],
+                thresholds["missing_vehicle_evidence_mean_delta_critical"],
+                "车辆证据缺失均值相对 baseline 漂移，需检查证据链路。",
             )
         )
     severity = "pass"
@@ -104,4 +104,3 @@ def _abs_delta_alert(name: str, value: float, warn: float, critical: float, mess
     if abs_value >= warn:
         return [Alert(name, "warn", value, warn, message)]
     return []
-

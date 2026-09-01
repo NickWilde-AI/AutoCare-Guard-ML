@@ -26,21 +26,37 @@ _WINDOW_SECONDS = {"5m": 300, "1h": 3600, "all": None}
 
 
 def _compute_counters(events: list[dict]) -> dict:
-    c = {"requests_total": 0, "ban_total": 0, "limit_total": 0,
-         "warning_total": 0, "ignore_total": 0, "parse_non_ok_total": 0,
-         "human_review_total": 0}
+    c = {
+        "requests_total": 0,
+        "emergency_total": 0,
+        "expert_total": 0,
+        "work_order_total": 0,
+        "followup_total": 0,
+        "collect_evidence_total": 0,
+        "information_total": 0,
+        "parse_non_ok_total": 0,
+        "human_review_total": 0,
+    }
     for e in events:
         c["requests_total"] += 1
-        h = e.get("handling_suggestion", "ignore")
-        if h == "ban_account":
-            c["ban_total"] += 1
-        elif h == "limit_account":
-            c["limit_total"] += 1
-        elif h == "warning":
-            c["warning_total"] += 1
+        h = e.get("recommended_action") or e.get("handling_suggestion") or "information_reply"
+        if h == "emergency_review":
+            c["emergency_total"] += 1
+        elif h == "expert_review":
+            c["expert_total"] += 1
+        elif h == "create_work_order":
+            c["work_order_total"] += 1
+        elif h == "service_followup":
+            c["followup_total"] += 1
+        elif h == "collect_more_evidence":
+            c["collect_evidence_total"] += 1
         else:
-            c["ignore_total"] += 1
-        if e.get("route") == "human_review_required":
+            c["information_total"] += 1
+        if e.get("requires_human_review") or e.get("route") in {
+            "review_queue",
+            "human_review_required",
+            "fallback_or_review",
+        }:
             c["human_review_total"] += 1
         if e.get("parse_non_ok"):
             c["parse_non_ok_total"] += 1
@@ -94,8 +110,14 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
 
     # 全局累计计数器（不受 event_log maxlen 限制）
     global_counters = {
-        "requests_total": 0, "ban_total": 0, "limit_total": 0,
-        "warning_total": 0, "ignore_total": 0, "parse_non_ok_total": 0,
+        "requests_total": 0,
+        "emergency_total": 0,
+        "expert_total": 0,
+        "work_order_total": 0,
+        "followup_total": 0,
+        "collect_evidence_total": 0,
+        "information_total": 0,
+        "parse_non_ok_total": 0,
         "human_review_total": 0,
     }
 
@@ -193,30 +215,43 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
         request_id = getattr(request.state, "request_id", None) or str(uuid4())
         t0 = time.time()
         pred = judge.predict(case)
-        # P1-01：服务层统一走 postprocess，保证 ban 三重保护与 parse_status 可观测。
+        # P1-01：服务层统一走 postprocess，保证 emergency 门禁与 parse_status 可观测。
         result = postprocess_prediction(pred, case)
         parsed_output = result.parsed_output
         route, final_action = result.route, result.final_action
+        requires_human_review = result.requires_human_review
         actual_ms = (time.time() - t0) * 1000
         # 演示模式（P2-23）：本地规则/轻量 judge 的实际耗时远低于真实推理，
         # 合成 180-520ms 用于看板展示；真实 checkpoint/API 模式使用实际耗时。
         simulated_latency = random.uniform(180, 520) if actual_ms < 50 else actual_ms
         latency_ms = round(simulated_latency, 1)
 
-        handling = parsed_output.get("handling_suggestion", "ignore")
-        topic = parsed_output.get("topic", "无主题")
+        action = parsed_output.get("recommended_action") or parsed_output.get(
+            "handling_suggestion", "information_reply"
+        )
+        topic = parsed_output.get("event_topic") or parsed_output.get("topic", "无风险事件")
         risk_level = parsed_output.get("risk_level", "low_risk")
+        judgment = parsed_output.get("event_judgment") or parsed_output.get(
+            "final_judgment", "not_risk_event"
+        )
         parse_non_ok = result.parse_status != "ok"
+        case_id = case.get("case_id") or case.get("ticket_id") or f"ac-{int(time.time())}-{len(event_log):04d}"
 
         event = {
             "ts": time.time(),
             "request_id": request_id,
-            "ticket_id": case.get("ticket_id", f"im-{int(time.time())}-{len(event_log):04d}"),
+            "case_id": case_id,
+            "ticket_id": case_id,
             "risk_level": risk_level,
+            "event_topic": topic,
             "topic": topic,
-            "handling_suggestion": handling,
+            "event_judgment": judgment,
+            "recommended_action": action,
             "route": route,
             "final_action": final_action,
+            "requires_human_review": requires_human_review,
+            "review_role_hint": result.review_role_hint,
+            "review_priority": result.review_priority,
             "latency_ms": latency_ms,
             "parse_non_ok": parse_non_ok,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -227,25 +262,43 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
 
         # 全局累计（不受 event_log maxlen 限制）
         global_counters["requests_total"] += 1
-        if handling == "ban_account": global_counters["ban_total"] += 1
-        elif handling == "limit_account": global_counters["limit_total"] += 1
-        elif handling == "warning": global_counters["warning_total"] += 1
-        else: global_counters["ignore_total"] += 1
-        if route == "human_review_required": global_counters["human_review_total"] += 1
-        if parse_non_ok: global_counters["parse_non_ok_total"] += 1
+        if action == "emergency_review":
+            global_counters["emergency_total"] += 1
+        elif action == "expert_review":
+            global_counters["expert_total"] += 1
+        elif action == "create_work_order":
+            global_counters["work_order_total"] += 1
+        elif action == "service_followup":
+            global_counters["followup_total"] += 1
+        elif action == "collect_more_evidence":
+            global_counters["collect_evidence_total"] += 1
+        else:
+            global_counters["information_total"] += 1
+        if requires_human_review or route in {"review_queue", "human_review_required", "fallback_or_review"}:
+            global_counters["human_review_total"] += 1
+        if parse_non_ok:
+            global_counters["parse_non_ok_total"] += 1
 
         audit_event = {
             "request_id": request_id,
-            "ticket_id": event["ticket_id"],
+            "case_id": case_id,
+            "ticket_id": case_id,
             "timestamp": event["timestamp"],
             "model_mode": mode,
             **versions.to_dict(),
             "risk_level": risk_level,
+            "event_topic": topic,
             "topic": topic,
-            "final_judgment": parsed_output.get("final_judgment", "not_exist_violation"),
-            "handling_suggestion": handling,
+            "event_judgment": judgment,
+            "final_judgment": judgment,
+            "recommended_action": action,
+            "handling_suggestion": action,
             "route": route,
             "final_action": final_action,
+            "requires_human_review": requires_human_review,
+            "review_role_hint": result.review_role_hint,
+            "review_priority": result.review_priority,
+            "policy_reasons": result.policy_reasons,
             "latency_ms": latency_ms,
             "parse_non_ok": parse_non_ok,
             "parse_status": result.parse_status,
@@ -259,9 +312,14 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
             **parsed_output,
             "route": route,
             "final_action": final_action,
+            "requires_human_review": requires_human_review,
+            "review_role_hint": result.review_role_hint,
+            "review_priority": result.review_priority,
+            "policy_reasons": result.policy_reasons,
             "parse_status": result.parse_status,
             "validation_errors": result.validation_errors,
             "request_id": request_id,
+            "case_id": case_id,
         }
 
     @app.get("/audit/tickets/{ticket_id}")
@@ -282,14 +340,13 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
             events = list(event_log)
             counters = dict(global_counters)  # 全量用独立累计，不受 maxlen 限制
         total = counters["requests_total"]
-        ban_rate = counters["ban_total"] / total if total > 0 else 0
+        emergency_rate = counters.get("emergency_total", 0) / total if total > 0 else 0
         parse_err_rate = counters["parse_non_ok_total"] / total if total > 0 else 0
         uptime_seconds = int(now - start_time)
 
         latency_stats = {}
         if latency_history:
             sorted_lat = sorted(latency_history)
-            # P2-50：延迟分位与 rollout/monitoring 共用 evaluation.percentile 插值口径。
             from .evaluation import percentile
 
             latency_stats = {
@@ -299,41 +356,56 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
                 "avg": round(sum(sorted_lat) / len(sorted_lat), 1),
             }
 
-        # 主题下钻：每个主题的 risk_level 分布 + handling 分布
+        action_keys = [
+            "information_reply",
+            "collect_more_evidence",
+            "service_followup",
+            "create_work_order",
+            "expert_review",
+            "emergency_review",
+        ]
         topic_stats: dict[str, dict] = {}
         for e in events:
-            t = e.get("topic", "无主题")
+            t = e.get("event_topic") or e.get("topic", "无风险事件")
             if t not in topic_stats:
                 topic_stats[t] = {
                     "count": 0,
                     "risk": {"low_risk": 0, "mid_risk": 0, "high_risk": 0},
-                    "handling": {"ignore": 0, "warning": 0, "limit_account": 0, "ban_account": 0},
+                    "actions": {k: 0 for k in action_keys},
                 }
             topic_stats[t]["count"] += 1
             rl = e.get("risk_level", "low_risk")
             if rl in topic_stats[t]["risk"]:
                 topic_stats[t]["risk"][rl] += 1
-            h = e.get("handling_suggestion", "ignore")
-            if h in topic_stats[t]["handling"]:
-                topic_stats[t]["handling"][h] += 1
+            h = e.get("recommended_action") or e.get("handling_suggestion") or "information_reply"
+            if h in topic_stats[t]["actions"]:
+                topic_stats[t]["actions"][h] += 1
 
         topic_distribution = {k: v["count"] for k, v in sorted(topic_stats.items(), key=lambda x: -x[1]["count"])}
         topic_breakdown = dict(sorted(topic_stats.items(), key=lambda x: -x[1]["count"]))
-
+        risk_event_like = sum(
+            counters.get(k, 0)
+            for k in (
+                "emergency_total",
+                "expert_total",
+                "work_order_total",
+                "followup_total",
+                "collect_evidence_total",
+            )
+        )
         return {
             "counters": counters,
             "window": window or "all",
             "rates": {
-                "ban_rate": round(ban_rate, 4),
+                "emergency_review_rate": round(emergency_rate, 4),
                 "parse_error_rate": round(parse_err_rate, 4),
-                "violation_rate": round((counters["ban_total"] + counters["limit_total"] + counters["warning_total"]) / total, 4) if total > 0 else 0,
+                "risk_event_rate": round(risk_event_like / total, 4) if total > 0 else 0,
             },
             "topic_distribution": topic_distribution,
             "topic_breakdown": topic_breakdown,
             "latency": latency_stats,
             "recent": list(recent_results)[:20],
             "uptime_seconds": uptime_seconds,
-            # P2-46：model_mode 复用 create_app 顶部计算好的单一来源 mode。
             "model_mode": mode,
         }
 
@@ -344,8 +416,13 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
         c = dict(global_counters)
         all_events = list(event_log)
         risk_counts = Counter(str(e.get("risk_level", "unknown")) for e in all_events)
-        topic_counts = Counter(str(e.get("topic", "unknown")) for e in all_events)
-        handling_counts = Counter(str(e.get("handling_suggestion", "unknown")) for e in all_events)
+        topic_counts = Counter(
+            str(e.get("event_topic") or e.get("topic", "unknown")) for e in all_events
+        )
+        action_counts = Counter(
+            str(e.get("recommended_action") or e.get("handling_suggestion", "unknown"))
+            for e in all_events
+        )
         route_counts = Counter(str(e.get("route", "unknown")) for e in all_events)
         latency_stats = _latency_stats([float(e.get("latency_ms", 0) or 0) for e in all_events])
         lines = [
@@ -365,11 +442,25 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
         lines.extend(f'im_guard_requests_by_topic_total{{topic="{_label(k)}"}} {v}' for k, v in sorted(topic_counts.items()))
         lines.extend(
             [
-                "# HELP im_guard_requests_by_handling_total Audit requests by handling suggestion.",
+                "# HELP im_guard_requests_by_action_total Audit requests by recommended action.",
+                "# TYPE im_guard_requests_by_action_total counter",
+            ]
+        )
+        lines.extend(
+            f'im_guard_requests_by_action_total{{recommended_action="{_label(k)}"}} {v}'
+            for k, v in sorted(action_counts.items())
+        )
+        # 兼容旧 Prometheus 规则标签名
+        lines.extend(
+            [
+                "# HELP im_guard_requests_by_handling_total Audit requests by recommended action (legacy label).",
                 "# TYPE im_guard_requests_by_handling_total counter",
             ]
         )
-        lines.extend(f'im_guard_requests_by_handling_total{{handling_suggestion="{_label(k)}"}} {v}' for k, v in sorted(handling_counts.items()))
+        lines.extend(
+            f'im_guard_requests_by_handling_total{{handling_suggestion="{_label(k)}"}} {v}'
+            for k, v in sorted(action_counts.items())
+        )
         lines.extend(
             [
                 "# HELP im_guard_requests_by_route_total Audit requests by route.",
@@ -401,10 +492,15 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
         labels = cfg.get("labels", {})
         return {
             "config_path": str(Path(config_path).resolve()),
-            "topics": labels.get("topics", []),
+            "topics": labels.get("event_topics") or labels.get("topics", []),
+            "event_topics": labels.get("event_topics") or labels.get("topics", []),
             "risk_levels": labels.get("risk_levels", []),
-            "judgments": labels.get("judgments", []),
-            "handling_suggestions": labels.get("handling_suggestions", []),
+            "judgments": labels.get("event_judgments") or labels.get("judgments", []),
+            "event_judgments": labels.get("event_judgments") or labels.get("judgments", []),
+            "handling_suggestions": labels.get("recommended_actions")
+            or labels.get("handling_suggestions", []),
+            "recommended_actions": labels.get("recommended_actions")
+            or labels.get("handling_suggestions", []),
             "alert_thresholds": cfg.get("alert_thresholds", {}),
             "rubrics": {k: v for k, v in cfg.get("rubrics", {}).items()},
             "model": cfg.get("model", {}),

@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+try:
+    from datetime import UTC, datetime
+except ImportError:  # Python < 3.11
+    from datetime import datetime, timezone
+    UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
@@ -51,9 +55,19 @@ def build_offline_eval_report(rows: list[dict[str, Any]], *, title: str = "AI-IM
     pairs = [row for row in rows if "label" in row and "prediction" in row]
     gold = [row["label"] for row in pairs]
     pred = [row["prediction"] for row in pairs]
-    metas = [{"topic": row.get("label", {}).get("topic", "unknown")} for row in pairs]
-    binary_targets = [1 if x["final_judgment"] == "exist_violation" else 0 for x in gold]
-    binary_preds = [1 if x["final_judgment"] == "exist_violation" else 0 for x in pred]
+    metas = [
+        {
+            "topic": row.get("label", {}).get("event_topic")
+            or row.get("label", {}).get("topic", "unknown")
+        }
+        for row in pairs
+    ]
+
+    def _judgment(x: dict[str, Any]) -> str:
+        return str(x.get("event_judgment") or x.get("final_judgment") or "")
+
+    binary_targets = [1 if _judgment(x) == "risk_event" else 0 for x in gold]
+    binary_preds = [1 if _judgment(x) == "risk_event" else 0 for x in pred]
     binary = eval_binary(binary_targets, binary_preds)
     multi = eval_multi_field(gold, pred, metas)
     versions = _collect_versions(pred)
@@ -73,7 +87,7 @@ def build_offline_eval_report(rows: list[dict[str, Any]], *, title: str = "AI-IM
     lines.extend(
         [
             "",
-            "## 二分类指标",
+            "## 二分类指标（risk_event）",
             "",
             "| 指标 | 数值 |",
             "| --- | ---: |",
@@ -91,6 +105,7 @@ def build_offline_eval_report(rows: list[dict[str, Any]], *, title: str = "AI-IM
             "| --- | ---: |",
             f"| risk_macro_f1 | {_fmt(multi['risk_macro_f1'])} |",
             f"| handling_macro_f1 | {_fmt(multi['handling_macro_f1'])} |",
+            f"| emergency_review_fpr | {_fmt(multi['emergency_review_fpr'])} |",
             "",
             "## 主题维度风险等级准确率",
             "",
@@ -105,7 +120,7 @@ def build_offline_eval_report(rows: list[dict[str, Any]], *, title: str = "AI-IM
             "",
             "## 说明",
             "",
-            "公开二分类数据只用于安全识别底座评估，不应单独证明 `limit_account` 或 `ban_account` 强处置能力。",
+            "公开二分类数据只用于安全识别底座评估，不应单独证明 `emergency_review` 或 `expert_review` 紧急/专家处置能力。",
             "",
         ]
     )

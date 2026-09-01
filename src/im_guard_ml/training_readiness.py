@@ -3,7 +3,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
-from datetime import UTC, datetime
+try:
+    from datetime import UTC, datetime
+except ImportError:  # Python < 3.11
+    from datetime import datetime, timezone
+    UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
@@ -49,7 +53,7 @@ def build_training_readiness_report(
         add(
             "public_binary_guardrail",
             "pass" if dataset_stats["public_strong_handling_count"] == 0 else "fail",
-            detail="public_binary samples must not train limit_account or ban_account.",
+            detail="public_binary samples must not train emergency_review or expert_review.",
             public_strong_handling_count=dataset_stats["public_strong_handling_count"],
         )
         add(
@@ -113,9 +117,9 @@ def build_training_readiness_report(
             f"LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8 im-guard --config {config_path} train {dataset}",
         ],
         "training_task": {
-            "objective": "Learn structured IM-risk audit JSON outputs from multi-evidence inputs.",
-            "primary_supervision": "final_judgment for public_binary samples; full risk/handling supervision only for internal or reviewed business samples.",
-            "open_source_boundary": "XGuard is suitable for cold-start safety recognition and data-pipeline demonstration, not for claiming real IM production performance.",
+            "objective": "Learn structured AutoCare service-case JSON outputs from multi-evidence inputs.",
+            "primary_supervision": "event_judgment for public_binary samples; full risk/action supervision only for internal or reviewed business samples.",
+            "open_source_boundary": "Public safety corpora are suitable for cold-start recognition demos, not for claiming real aftersales emergency routing performance.",
         },
     }
 
@@ -156,8 +160,8 @@ def _scan_dataset(path: Path, *, max_rows: int | None = None) -> dict[str, Any]:
     public_strong = 0
     label_parse_errors = 0
     task_types: dict[str, int] = {}
-    final_judgments: dict[str, int] = {}
-    handling: dict[str, int] = {}
+    event_judgments: dict[str, int] = {}
+    actions: dict[str, int] = {}
 
     with path.open("r", encoding="utf-8") as fh:
         for line in fh:
@@ -169,13 +173,22 @@ def _scan_dataset(path: Path, *, max_rows: int | None = None) -> dict[str, Any]:
                 label = row.get("label") or {}
                 task_type = str(row.get("task_type") or row.get("source_type") or "")
                 task_types[task_type] = task_types.get(task_type, 0) + 1
-                final = str(label.get("final_judgment") or "")
-                final_judgments[final] = final_judgments.get(final, 0) + 1
-                action = str(label.get("handling_suggestion") or "")
-                handling[action] = handling.get(action, 0) + 1
+                judgment = str(
+                    label.get("event_judgment") or label.get("final_judgment") or ""
+                )
+                event_judgments[judgment] = event_judgments.get(judgment, 0) + 1
+                action = str(
+                    label.get("recommended_action") or label.get("handling_suggestion") or ""
+                )
+                actions[action] = actions.get(action, 0) + 1
                 if task_type == "public_binary":
                     public_rows += 1
-                    if action in {"limit_account", "ban_account"}:
+                    if action in {
+                        "emergency_review",
+                        "expert_review",
+                        "ban_account",
+                        "limit_account",
+                    }:
                         public_strong += 1
             except Exception:
                 label_parse_errors += 1
@@ -188,6 +201,8 @@ def _scan_dataset(path: Path, *, max_rows: int | None = None) -> dict[str, Any]:
         "public_strong_handling_count": public_strong,
         "label_parse_errors": label_parse_errors,
         "task_types": task_types,
-        "final_judgments": final_judgments,
-        "handling_suggestions": handling,
+        "event_judgments": event_judgments,
+        "final_judgments": event_judgments,
+        "recommended_actions": actions,
+        "handling_suggestions": actions,
     }

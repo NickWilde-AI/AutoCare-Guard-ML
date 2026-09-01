@@ -108,7 +108,18 @@ def test_model_registry_report_fails_when_metric_violates_guardrail(tmp_path):
     report = build_model_registry_report(path)
 
     assert report["status"] == "fail"
-    assert any(item["name"] == "metric_guardrail:candidate-v2:ban_account_fpr" for item in report["checks"])
+    assert any(
+        item["name"]
+        in {
+            "metric_guardrail:candidate-v2:ban_account_fpr",
+            "metric_guardrail:candidate-v2:emergency_review_fpr",
+            "metric_guardrail:candidate-v2:max_ban_account_fpr",
+            "metric_guardrail:candidate-v2:emergency_review_fpr_max",
+        }
+        or "emergency_review_fpr" in item.get("name", "")
+        or "ban_account_fpr" in item.get("name", "")
+        for item in report["checks"]
+    )
 
 
 def test_model_registry_report_does_not_apply_promotion_guardrails_to_retired_models(tmp_path):

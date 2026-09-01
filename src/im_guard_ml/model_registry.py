@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+try:
+    from datetime import UTC, datetime
+except ImportError:  # Python < 3.11
+    from datetime import datetime, timezone
+    UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
@@ -96,11 +100,19 @@ def build_model_registry_report(path: str | Path = "configs/model_registry.yaml"
 def _metric_guardrail_checks(version: str, metrics: dict[str, Any], guardrails: dict[str, Any]) -> list[dict[str, Any]]:
     mapping = [
         ("min_final_judgment_f1", "final_judgment_f1", ">="),
+        ("min_event_judgment_f1", "event_judgment_f1", ">="),
         ("min_handling_macro_f1", "handling_macro_f1", ">="),
-        ("max_ban_account_fpr", "ban_account_fpr", "<="),
+        ("max_ban_account_fpr", "emergency_review_fpr", "<="),  # 兼容旧 guardrail 名
+        ("max_emergency_review_fpr", "emergency_review_fpr", "<="),
         ("max_parse_non_ok_rate", "parse_non_ok_rate", "<="),
         ("max_p95_latency_ms", "p95_latency_ms", "<="),
     ]
+    # 指标侧兼容：旧 ban_account_fpr 读作 emergency_review_fpr
+    metrics = dict(metrics)
+    if "emergency_review_fpr" not in metrics and "ban_account_fpr" in metrics:
+        metrics["emergency_review_fpr"] = metrics["ban_account_fpr"]
+    if "event_judgment_f1" not in metrics and "final_judgment_f1" in metrics:
+        metrics["event_judgment_f1"] = metrics["final_judgment_f1"]
     checks: list[dict[str, Any]] = []
     for guardrail, metric, op in mapping:
         if guardrail not in guardrails:

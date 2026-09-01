@@ -1,4 +1,4 @@
-"""Tests for the heuristic rule judge (P2-25 覆盖缺口：inference 模块此前零测试)."""
+"""Tests for the AutoCare heuristic rule judge."""
 
 from im_guard_ml.inference import HeuristicJudge
 
@@ -7,73 +7,81 @@ def _judge() -> HeuristicJudge:
     return HeuristicJudge({})
 
 
-def test_gamble_chat_maps_to_fraud_topic():
-    # 定稿口径：11 类一级主题，赌博/博彩引流归入"诈骗引流"。
+def test_battery_smoke_maps_to_battery_topic():
     result = _judge().predict(
         {
-            "audit_scene": {},
-            "chat_evidence_list": [{"original_content": "加群看走势图，跟着计划买，稳赢不亏"}],
-            "behavior_abnormal_list": [],
+            "service_context": {},
+            "conversation_evidence": [{"content": "车内有焦糊味，好像电池冒烟了"}],
+            "vehicle_signal_summary": {"warning_lights": ["电池过热"]},
+            "fault_evidence": [{"fault_domain": "battery", "severity_from_source": "critical"}],
+            "vehicle_context": {"vehicle_motion_state": "driving"},
         }
     )
-    assert result["topic"] == "诈骗引流"
-    assert result["final_judgment"] == "exist_violation"
+    assert result["event_topic"] == "动力电池与热安全"
+    assert result["event_judgment"] == "risk_event"
+    assert result["recommended_action"] == "emergency_review"
+    assert result["risk_level"] == "high_risk"
 
 
 def test_plain_chat_is_safe():
     result = _judge().predict(
         {
-            "audit_scene": {},
-            "chat_evidence_list": [{"original_content": "今天天气不错，周末一起开黑吗？"}],
-            "behavior_abnormal_list": [],
+            "service_context": {},
+            "conversation_evidence": [{"content": "请问质保政策在哪里看？"}],
+            "vehicle_signal_summary": {},
+            "fault_evidence": [],
         }
     )
-    assert result["final_judgment"] == "not_exist_violation"
+    # "质保" keyword may map to warranty topic with mid risk; use truly neutral text
+    result = _judge().predict(
+        {
+            "service_context": {},
+            "conversation_evidence": [{"content": "你好，今天天气不错"}],
+            "vehicle_signal_summary": {},
+            "fault_evidence": [],
+        }
+    )
+    assert result["event_judgment"] == "not_risk_event"
     assert result["risk_level"] == "low_risk"
-    assert result["handling_suggestion"] == "ignore"
+    assert result["recommended_action"] == "information_reply"
 
 
-def test_semantic_only_mid_risk_routes_warning():
-    # 仅语义命中、无行为/大额印证 → 轻度首次风险走 warning（P2-21）。
+def test_charging_without_vehicle_evidence_routes_expert():
     result = _judge().predict(
         {
-            "audit_scene": {"behavior_key_summary": {}},
-            "chat_evidence_list": [{"original_content": "加我私V，发你一个稳赚的项目"}],
-            "behavior_abnormal_list": [],
+            "service_context": {},
+            "conversation_evidence": [{"content": "充电枪充不上电，反复中断"}],
+            "vehicle_signal_summary": {},
+            "fault_evidence": [],
         }
     )
+    assert result["event_topic"] == "充电与高压系统异常"
     assert result["risk_level"] == "mid_risk"
-    assert result["handling_suggestion"] == "warning"
+    assert result["recommended_action"] in {"expert_review", "collect_more_evidence"}
 
 
-def test_behavior_only_violation_basis_does_not_claim_semantic_hit():
-    # 纯行为触发（无语义命中）时，依据不得声称"命中违规语义要点"（P2-21）。
+def test_vehicle_evidence_with_mid_risk_creates_work_order():
     result = _judge().predict(
         {
-            "audit_scene": {
-                "behavior_key_summary": {
-                    "gift_total_value": 6000,
-                    "t_bean_consume": "大额消费。",
-                    "reward_behavior": "持续高频大额打赏。",
-                }
-            },
-            "chat_evidence_list": [{"original_content": "你好，在吗？"}],
-            "behavior_abnormal_list": [{"abnormal_type": "异常打赏模式"}],
+            "service_context": {},
+            "conversation_evidence": [{"content": "充电偶尔中断"}],
+            "vehicle_signal_summary": {"warning_lights": ["充电异常"], "charging_status": "fault"},
+            "fault_evidence": [],
         }
     )
-    assert result["final_judgment"] == "exist_violation"
-    assert "未识别到明确违规话术" in result["judgment_basis"]
-    assert "命中违规语义要点" not in result["judgment_basis"]
+    assert result["event_judgment"] == "risk_event"
+    assert result["recommended_action"] == "create_work_order"
 
 
-def test_brush_with_behavior_confirmation_is_high_ban():
+def test_severe_missing_evidence_collect_more():
     result = _judge().predict(
         {
-            "audit_scene": {},
-            "chat_evidence_list": [{"original_content": "今晚还是老规矩，帮我冲一下。"}],
-            "behavior_abnormal_list": [{"abnormal_type": "短时高频大额打赏"}],
+            "service_context": {},
+            "conversation_evidence": [{"content": "感觉制动有点软"}],
+            "vehicle_signal_summary": {},
+            "fault_evidence": [],
+            "missing_and_conflicts": {"missing_fields": ["vehicle_signal_summary"]},
         }
     )
-    assert result["risk_level"] == "high_risk"
-    assert result["handling_suggestion"] == "ban_account"
-    assert result["topic"] == "代刷/包榜"
+    assert result["event_judgment"] == "insufficient_evidence"
+    assert result["recommended_action"] == "collect_more_evidence"

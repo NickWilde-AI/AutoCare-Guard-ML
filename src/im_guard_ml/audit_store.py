@@ -33,7 +33,9 @@ class JsonlAuditStore:
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if str(event.get("ticket_id", "")) == ticket_id:
+                if str(event.get("ticket_id", "")) == ticket_id or str(
+                    event.get("case_id", "")
+                ) == ticket_id:
                     matches.append(event)
         return matches[-limit:]
 
@@ -59,7 +61,7 @@ class SQLiteAuditStore:
                 """,
                 (
                     event.get("request_id", ""),
-                    event.get("ticket_id", ""),
+                    event.get("case_id") or event.get("ticket_id", ""),
                     event.get("timestamp", ""),
                     event.get("model_mode", ""),
                     event.get("model_version", ""),
@@ -68,9 +70,9 @@ class SQLiteAuditStore:
                     event.get("feature_schema_version", ""),
                     event.get("postprocess_version", ""),
                     event.get("risk_level", ""),
-                    event.get("topic", ""),
-                    event.get("final_judgment", ""),
-                    event.get("handling_suggestion", ""),
+                    event.get("event_topic") or event.get("topic", ""),
+                    event.get("event_judgment") or event.get("final_judgment", ""),
+                    event.get("recommended_action") or event.get("handling_suggestion", ""),
                     event.get("route", ""),
                     event.get("final_action", ""),
                     float(event.get("latency_ms", 0) or 0),

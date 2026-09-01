@@ -1,22 +1,27 @@
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
+try:
+    from datetime import UTC, datetime
+except ImportError:  # Python < 3.11
+    from datetime import datetime, timezone
+    UTC = timezone.utc
 from typing import Any
 
 from .evaluation import eval_binary, eval_multi_field, percentile
 
 
-DEFAULT_SUCCESS_METRICS = ["final_judgment_f1", "handling_macro_f1", "ban_account_fpr"]
+DEFAULT_SUCCESS_METRICS = ["event_judgment_f1", "handling_macro_f1", "emergency_review_fpr"]
 DEFAULT_GUARDRAILS = {
-    "ban_account_fpr_max": 0.03,
+    "emergency_review_fpr_max": 0.03,
     "parse_non_ok_rate_max": 0.02,
     "p95_latency_ms_max": 1200.0,
 }
 
-# 部署模板中红线的运行时覆盖（P1-08）：与 deploy/env 示例中的同名变量一一对应。
+# 部署模板中红线的运行时覆盖（P1-08）
 _ENV_GUARDRAIL_OVERRIDES = {
-    "IM_GUARD_BAN_FPR_REDLINE": "ban_account_fpr_max",
+    "IM_GUARD_BAN_FPR_REDLINE": "emergency_review_fpr_max",  # 兼容旧 env 名
+    "IM_GUARD_EMERGENCY_FPR_REDLINE": "emergency_review_fpr_max",
     "IM_GUARD_P95_LATENCY_BUDGET_MS": "p95_latency_ms_max",
 }
 
@@ -46,9 +51,17 @@ def build_ab_report(
     rollout_cfg = config or {}
     ab_cfg = rollout_cfg.get("ab_test", rollout_cfg)
     success_metrics = list(ab_cfg.get("success_metrics") or DEFAULT_SUCCESS_METRICS)
+    # 兼容旧配置键
+    success_metrics = [
+        "emergency_review_fpr" if m == "ban_account_fpr" else
+        "event_judgment_f1" if m == "final_judgment_f1" else m
+        for m in success_metrics
+    ]
     guardrails = {**DEFAULT_GUARDRAILS, **(ab_cfg.get("guardrails") or {})}
-    # P1-08：接线 IM_GUARD_BAN_FPR_REDLINE / IM_GUARD_P95_LATENCY_BUDGET_MS
-    # 环境变量，作为部署模板中红线配置的运行时覆盖（与 rollout.yaml 同级覆盖）。
+    if "ban_account_fpr_max" in guardrails and "emergency_review_fpr_max" not in guardrails:
+        guardrails["emergency_review_fpr_max"] = guardrails.pop("ban_account_fpr_max")
+    elif "ban_account_fpr_max" in guardrails:
+        guardrails.pop("ban_account_fpr_max", None)
     guardrails.update(_env_guardrail_overrides())
 
     control_by_id = _index_by_ticket(control_rows)
@@ -86,7 +99,7 @@ def build_ab_report(
         },
         "notes": [
             "A/B 报告基于离线 replay prediction JSONL；真实线上放量仍需要接入生产流量分桶、人审回写和告警平台。",
-            "`ban_account_fpr` 以 gold 非违规样本中被预测为 ban_account 的比例计算。",
+            "`emergency_review_fpr` 以 gold 非 emergency_review 样本中被预测为 emergency_review 的比例计算。",
         ],
     }
 
@@ -128,9 +141,17 @@ def render_ab_report_markdown(report: dict[str, Any], *, title: str = "AI-IM-Gua
 def _index_by_ticket(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     indexed: dict[str, dict[str, Any]] = {}
     for idx, row in enumerate(rows):
-        ticket_id = str(row.get("ticket_id") or row.get("id") or idx)
+        ticket_id = str(row.get("case_id") or row.get("ticket_id") or row.get("id") or idx)
         indexed[ticket_id] = row
     return indexed
+
+
+def _judgment(item: dict[str, Any]) -> str:
+    return str(item.get("event_judgment") or item.get("final_judgment") or "")
+
+
+def _action(item: dict[str, Any]) -> str:
+    return str(item.get("recommended_action") or item.get("handling_suggestion") or "")
 
 
 def _variant_metrics(rows: list[dict[str, Any]]) -> dict[str, float | None]:
@@ -147,26 +168,29 @@ def _variant_metrics(rows: list[dict[str, Any]]) -> dict[str, float | None]:
     if not pairs:
         metrics.update(
             {
+                "event_judgment_f1": None,
                 "final_judgment_f1": None,
-                "final_judgment_fpr": None,
+                "event_judgment_fpr": None,
                 "risk_macro_f1": None,
                 "handling_macro_f1": None,
-                "ban_account_fpr": None,
+                "emergency_review_fpr": None,
             }
         )
         return metrics
 
-    binary_targets = [1 if item.get("final_judgment") == "exist_violation" else 0 for item in gold]
-    binary_preds = [1 if item.get("final_judgment") == "exist_violation" else 0 for item in pred]
+    binary_targets = [1 if _judgment(item) == "risk_event" else 0 for item in gold]
+    binary_preds = [1 if _judgment(item) == "risk_event" else 0 for item in pred]
     binary = eval_binary(binary_targets, binary_preds)
     multi = eval_multi_field(gold, pred)
+    emergency_fpr = multi["emergency_review_fpr"]
     metrics.update(
         {
-            "final_judgment_f1": binary["f1"],
-            "final_judgment_fpr": binary["fpr"],
+            "event_judgment_f1": binary["f1"],
+            "final_judgment_f1": binary["f1"],  # 兼容旧指标名
+            "event_judgment_fpr": binary["fpr"],
             "risk_macro_f1": multi["risk_macro_f1"],
             "handling_macro_f1": multi["handling_macro_f1"],
-            "ban_account_fpr": _ban_account_fpr(gold, pred),
+            "emergency_review_fpr": emergency_fpr,
         }
     )
     return metrics
@@ -191,7 +215,6 @@ def _p95_latency_ms(rows: list[dict[str, Any]]) -> float:
             continue
     if not values:
         return 0.0
-    # P95 与 monitoring 共用 evaluation.percentile 的线性插值口径（P2-50）。
     return float(percentile(sorted(values), 0.95))
 
 
@@ -211,14 +234,6 @@ def _human_review_overturn_rate(rows: list[dict[str, Any]]) -> float | None:
         if is_error is True or str(review_result).lower() in {"overturn", "overturned", "reject", "model_error"}:
             overturn += 1
     return overturn / len(reviewed)
-
-
-def _ban_account_fpr(gold: list[dict[str, Any]], pred: list[dict[str, Any]]) -> float:
-    negatives = [idx for idx, item in enumerate(gold) if item.get("final_judgment") != "exist_violation"]
-    if not negatives:
-        return 0.0
-    false_bans = sum(1 for idx in negatives if pred[idx].get("handling_suggestion") == "ban_account")
-    return false_bans / len(negatives)
 
 
 def _metric_delta(candidate: float | None, control: float | None) -> float | None:
@@ -256,7 +271,8 @@ def _success_results(
 
 def _guardrail_results(metrics: dict[str, float | None], guardrails: dict[str, float]) -> list[dict[str, Any]]:
     mapping = {
-        "ban_account_fpr_max": "ban_account_fpr",
+        "emergency_review_fpr_max": "emergency_review_fpr",
+        "ban_account_fpr_max": "emergency_review_fpr",  # 兼容
         "parse_non_ok_rate_max": "parse_non_ok_rate",
         "p95_latency_ms_max": "p95_latency_ms",
         "human_review_overturn_rate_max": "human_review_overturn_rate",
@@ -268,7 +284,9 @@ def _guardrail_results(metrics: dict[str, float | None], guardrails: dict[str, f
         value = metrics.get(metric)
         threshold = float(guardrails[guardrail])
         status = "missing" if value is None else "pass" if value <= threshold else "fail"
-        results.append({"name": guardrail, "metric": metric, "value": value, "threshold": threshold, "status": status})
+        # 对外统一展示新名字
+        name = "emergency_review_fpr_max" if guardrail == "ban_account_fpr_max" else guardrail
+        results.append({"name": name, "metric": metric, "value": value, "threshold": threshold, "status": status})
     return results
 
 

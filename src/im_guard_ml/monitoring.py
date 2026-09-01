@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
+from .schema import ServiceCase
+
 
 def build_monitoring_report(rows: list[dict[str, Any]]) -> dict[str, Any]:
     predictions = [row.get("prediction", row) for row in rows]
@@ -11,14 +13,22 @@ def build_monitoring_report(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "total": len(rows),
         "prediction_distribution": {
             "risk_level": _field_dist(predictions, "risk_level"),
-            "final_judgment": _field_dist(predictions, "final_judgment"),
-            "handling_suggestion": _field_dist(predictions, "handling_suggestion"),
+            "event_judgment": _field_dist(predictions, "event_judgment", fallback="final_judgment"),
+            "recommended_action": _field_dist(
+                predictions, "recommended_action", fallback="handling_suggestion"
+            ),
             "route": _field_dist(predictions, "route"),
         },
         "input_distribution": {
-            "chat_evidence_count": _numeric_summary([len(row.get("chat_evidence_list", []) or []) for row in cases]),
-            "behavior_abnormal_count": _numeric_summary([len(row.get("behavior_abnormal_list", []) or []) for row in cases]),
-            "gift_total_value": _numeric_summary([_gift_value(row) for row in cases]),
+            "conversation_evidence_count": _numeric_summary(
+                [len(_conversation(row)) for row in cases]
+            ),
+            "fault_evidence_count": _numeric_summary(
+                [len(row.get("fault_evidence") or []) for row in cases]
+            ),
+            "missing_vehicle_evidence": _numeric_summary(
+                [0.0 if ServiceCase.from_dict(row).has_vehicle_side_evidence() else 1.0 for row in cases]
+            ),
         },
         "quality_guards": _quality_guards(cases, predictions),
     }
@@ -32,11 +42,13 @@ def compare_reports(current: dict[str, Any], baseline: dict[str, Any]) -> dict[s
             current.get("prediction_distribution", {}).get("risk_level", {}),
             baseline.get("prediction_distribution", {}).get("risk_level", {}),
         ),
-        "handling_delta": _dist_delta(
-            current.get("prediction_distribution", {}).get("handling_suggestion", {}),
-            baseline.get("prediction_distribution", {}).get("handling_suggestion", {}),
+        "action_delta": _dist_delta(
+            current.get("prediction_distribution", {}).get("recommended_action", {}),
+            baseline.get("prediction_distribution", {}).get("recommended_action", {}),
         ),
-        "gift_total_value_mean_delta": _mean_delta(current, baseline, "gift_total_value"),
+        "missing_vehicle_evidence_mean_delta": _mean_delta(
+            current, baseline, "missing_vehicle_evidence"
+        ),
     }
 
 
@@ -60,7 +72,7 @@ def build_sliding_window_report(
     baseline = baseline_report or build_monitoring_report(rows)
     windows: list[dict[str, Any]] = []
     for start in range(0, max(len(rows), 1), step):
-        window_rows = rows[start:start + window_size]
+        window_rows = rows[start : start + window_size]
         if not window_rows:
             break
         report = build_monitoring_report(window_rows)
@@ -96,8 +108,16 @@ def build_sliding_window_report(
     }
 
 
-def _field_dist(rows: list[dict[str, Any]], field: str) -> dict[str, float]:
-    counter = Counter(str(row.get(field, "missing")) for row in rows)
+def _field_dist(
+    rows: list[dict[str, Any]], field: str, *, fallback: str | None = None
+) -> dict[str, float]:
+    values: list[str] = []
+    for row in rows:
+        value = row.get(field)
+        if value is None and fallback:
+            value = row.get(fallback)
+        values.append(str(value if value is not None else "missing"))
+    counter = Counter(values)
     total = sum(counter.values()) or 1
     return {k: v / total for k, v in sorted(counter.items())}
 
@@ -106,7 +126,6 @@ def _numeric_summary(values: list[float]) -> dict[str, float]:
     if not values:
         return {"count": 0, "min": 0.0, "max": 0.0, "mean": 0.0}
     values = sorted(float(v) for v in values)
-    # P50/P95 与 rollout 共用 evaluation.percentile 的线性插值口径（P2-50）。
     from .evaluation import percentile
 
     return {
@@ -119,26 +138,26 @@ def _numeric_summary(values: list[float]) -> dict[str, float]:
     }
 
 
-def _gift_value(row: dict[str, Any]) -> float:
-    summary = row.get("audit_scene", {}).get("behavior_key_summary", {})
-    try:
-        return float(summary.get("gift_total_value", 0) or 0)
-    except (TypeError, ValueError):
-        return 0.0
+def _conversation(row: dict[str, Any]) -> list[Any]:
+    value = row.get("conversation_evidence") or row.get("chat_evidence_list") or []
+    return value if isinstance(value, list) else []
+
+
+def _action(pred: dict[str, Any]) -> str:
+    return str(pred.get("recommended_action") or pred.get("handling_suggestion") or "")
 
 
 def _quality_guards(cases: list[dict[str, Any]], predictions: list[dict[str, Any]]) -> dict[str, Any]:
-    # 口径（P2-54）：缺失 parse_status/latency_ms 字段的旧格式 prediction
-    # 会按 None/"ok"/0 计入（演示级统计）；生产 replay 数据应统一由
-    # /judge 或 CLI --with-route 产出（两者均已带 parse_status）。
     total = len(cases) or 1
-    ban_count = sum(1 for pred in predictions if pred.get("handling_suggestion") == "ban_account")
+    emergency_count = sum(1 for pred in predictions if _action(pred) == "emergency_review")
     parse_fail = sum(1 for pred in predictions if pred.get("parse_status") not in (None, "ok"))
-    empty_behavior = sum(1 for row in cases if not row.get("behavior_abnormal_list") and not row.get("audit_scene", {}).get("behavior_key_summary"))
+    missing_vehicle = sum(
+        1 for row in cases if not ServiceCase.from_dict(row).has_vehicle_side_evidence()
+    )
     return {
-        "ban_account_rate": ban_count / total,
+        "emergency_review_rate": emergency_count / total,
         "parse_non_ok_rate": parse_fail / total,
-        "empty_behavior_rate": empty_behavior / total,
+        "missing_vehicle_evidence_rate": missing_vehicle / total,
     }
 
 

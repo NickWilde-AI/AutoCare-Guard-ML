@@ -50,15 +50,15 @@ EVIDENCE_STRENGTH = {
 
 # Generation prompt template for the level-specific generator
 # P2-18：控制条件补全主文档 6.2 的五个维度（主题/风险/语义强弱/行为强弱/处置档位）。
-GENERATOR_PROMPT = """你是一个 IM 私聊审核案例生成器。请根据以下条件生成一条完整的审核案例。
+GENERATOR_PROMPT = """你是一个汽车售后风险研判案例生成器。请根据以下条件生成一条完整的服务事件案例。
 
 <生成条件>
 目标风险等级: {risk_level}
-目标违规主题: {topic}
+目标事件主题: {topic}
 证据组合类型: {evidence_combo}
-语义证据强弱: {semantic_strength}
-行为证据强弱: {behavior_strength}
-目标处置档位: {handling}
+对话证据强弱: {semantic_strength}
+车辆证据强弱: {behavior_strength}
+目标建议动作: {handling}
 </生成条件>
 
 <风险等级 rubric>
@@ -66,14 +66,13 @@ GENERATOR_PROMPT = """你是一个 IM 私聊审核案例生成器。请根据以
 </风险等级 rubric>
 
 请生成一条包含以下字段的 JSON 案例：
-- audit_scene: 审核场景（含 behavior_key_summary）
-- chat_evidence_list: 聊天证据列表
-- behavior_abnormal_list: 行为异常列表
-- label: 标签（risk_level, topic, final_judgment, handling_suggestion, correlation_analysis, judgment_basis）
+- service_context / vehicle_context
+- conversation_evidence / vehicle_signal_summary / fault_evidence
+- label: 标签（risk_level, event_topic, event_judgment, recommended_action, correlation_analysis, uncertainty_reason）
 
 要求：
 1. 证据内容必须符合目标风险等级的 rubric 定义
-2. 语义/行为证据强弱与目标处置档位必须符合生成条件
+2. 证据强弱与目标动作必须符合生成条件
 3. 输出严格 JSON 格式"""
 
 
@@ -107,7 +106,8 @@ def prepare_seeds(
         # Stratify by topic to ensure coverage
         by_topic: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for case in pool:
-            topic = case.get("label", {}).get("topic", "无主题")
+            label = case.get("label", {})
+            topic = label.get("event_topic") or label.get("topic", "无风险事件")
             by_topic[topic].append(case)
 
         selected: list[dict[str, Any]] = []
@@ -148,23 +148,31 @@ def build_generator_training_data(
     for case in seeds:
         label = case.get("label", {})
         level = label.get("risk_level", "mid_risk")
-        topic = label.get("topic", "无主题")
+        topic = label.get("event_topic") or label.get("topic", "无风险事件")
 
         # Infer evidence combination from case structure
-        has_chat = bool(case.get("chat_evidence_list"))
-        has_behavior = bool(case.get("behavior_abnormal_list"))
-        if has_chat and has_behavior:
+        has_chat = bool(
+            case.get("conversation_evidence") or case.get("chat_evidence_list")
+        )
+        has_vehicle = bool(
+            case.get("fault_evidence")
+            or case.get("vehicle_signal_summary")
+            or case.get("behavior_abnormal_list")
+        )
+        if has_chat and has_vehicle:
             combo = "semantic_heavy_behavior_heavy"
         elif has_chat:
             combo = "semantic_only"
-        elif has_behavior:
+        elif has_vehicle:
             combo = "behavior_only"
         else:
             combo = "semantic_only"
 
         rubric_text = rubrics.get(topic, rubrics.get("__default__", ""))
         semantic_strength, behavior_strength = EVIDENCE_STRENGTH[combo]
-        handling = label.get("handling_suggestion", "ignore")
+        handling = label.get("recommended_action") or label.get(
+            "handling_suggestion", "information_reply"
+        )
 
         prompt = GENERATOR_PROMPT.format(
             risk_level=level,
@@ -185,46 +193,38 @@ def build_generator_training_data(
 
 
 def validate_generated_case(case: dict[str, Any]) -> tuple[bool, list[str]]:
-    """Validate a generated case against schema and rubric consistency.
-
-    P2-17：本函数覆盖结构性与标签一致性校验（Schema/枚举/ban-行为证据/
-    高风险证据存在性）；"聊天与行为语义一致性"的深检由数据与审核团队的
-    多方复核环节承接（主文档 6.2 第 3 步），代码侧无法替代人工语义判断。
-
-    Returns (is_valid, list_of_errors).
-    """
+    """Validate a generated case against schema and evidence consistency."""
     errors: list[str] = []
 
-    # Required fields
-    if not case.get("audit_scene"):
-        errors.append("missing audit_scene")
-    if not isinstance(case.get("chat_evidence_list"), list):
-        errors.append("missing or invalid chat_evidence_list")
-    if not isinstance(case.get("behavior_abnormal_list"), list):
-        errors.append("missing or invalid behavior_abnormal_list")
+    has_service = bool(case.get("service_context") or case.get("audit_scene"))
+    if not has_service:
+        errors.append("missing service_context")
+    conversation = case.get("conversation_evidence") or case.get("chat_evidence_list")
+    if not isinstance(conversation, list):
+        errors.append("missing or invalid conversation_evidence")
 
     label = case.get("label")
     if not isinstance(label, dict):
         errors.append("missing label")
         return False, errors
 
-    # Label validation
     label_errors = validate_label(label)
     errors.extend(label_errors)
 
-    # Evidence-label consistency checks
-    has_behavior = bool(case.get("behavior_abnormal_list"))
-    handling = label.get("handling_suggestion")
+    has_vehicle = bool(
+        case.get("fault_evidence")
+        or case.get("vehicle_signal_summary")
+        or case.get("behavior_abnormal_list")
+    )
+    action = label.get("recommended_action") or label.get("handling_suggestion")
     risk = label.get("risk_level")
 
-    # ban_account should have behavior evidence
-    if handling == "ban_account" and not has_behavior:
-        errors.append("ban_account without behavior evidence")
+    if action == "emergency_review" and not has_vehicle:
+        errors.append("emergency_review without vehicle-side evidence")
 
-    # high_risk should have at least some evidence
     if risk == "high_risk":
-        has_chat = bool(case.get("chat_evidence_list"))
-        if not has_chat and not has_behavior:
+        has_chat = bool(conversation)
+        if not has_chat and not has_vehicle:
             errors.append("high_risk without any evidence")
 
     return len(errors) == 0, errors

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ai-im-guard-ml"
 version = "0.1.0"
-description = "面向 IM 私聊风控审核场景的企业级 AI/ML 多证据风险审核框架。"
+description = "AutoCare：新能源汽车售后风险智能研判与工单路由的多证据 LLM Judge 工程框架（包名 im_guard_ml 保留历史命名）。"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Chen Peng" }]

@@ -1,4 +1,4 @@
-"""Tests for training module (field-level loss masking)."""
+"""Tests for training module (field-level loss masking, AutoCare)."""
 
 from im_guard_ml.training import _normalize_public_binary_labels, tokenize_training_case
 
@@ -9,16 +9,16 @@ class TestNormalizePublicBinaryLabels:
             "task_type": "multi_label",
             "label": {
                 "risk_level": "high_risk",
-                "final_judgment": "exist_violation",
-                "handling_suggestion": "ban_account",
-                "topic": "代刷/包榜",
+                "event_judgment": "risk_event",
+                "recommended_action": "emergency_review",
+                "event_topic": "动力电池与热安全",
             },
         }
         result = _normalize_public_binary_labels(case)
         assert result["label"]["risk_level"] == "high_risk"
-        assert result["label"]["handling_suggestion"] == "ban_account"
+        assert result["label"]["recommended_action"] == "emergency_review"
 
-    def test_public_violation_capped(self):
+    def test_public_risk_capped(self):
         case = {
             "task_type": "public_binary",
             "label": {
@@ -30,7 +30,8 @@ class TestNormalizePublicBinaryLabels:
         }
         result = _normalize_public_binary_labels(case)
         assert result["label"]["risk_level"] == "mid_risk"
-        assert result["label"]["handling_suggestion"] == "warning"
+        assert result["label"]["recommended_action"] == "service_followup"
+        assert result["label"]["event_judgment"] == "risk_event"
 
     def test_public_safe_normalized(self):
         case = {
@@ -44,8 +45,8 @@ class TestNormalizePublicBinaryLabels:
         }
         result = _normalize_public_binary_labels(case)
         assert result["label"]["risk_level"] == "low_risk"
-        assert result["label"]["handling_suggestion"] == "ignore"
-        assert result["label"]["topic"] == "无主题"
+        assert result["label"]["recommended_action"] == "information_reply"
+        assert result["label"]["event_topic"] == "无风险事件"
 
     def test_no_label_unchanged(self):
         case = {"task_type": "public_binary", "label": "not_a_dict"}
@@ -56,12 +57,11 @@ class TestNormalizePublicBinaryLabels:
         case = {
             "label": {
                 "risk_level": "high_risk",
-                "final_judgment": "exist_violation",
-                "handling_suggestion": "ban_account",
+                "recommended_action": "emergency_review",
             },
         }
         result = _normalize_public_binary_labels(case)
-        assert result["label"]["handling_suggestion"] == "ban_account"
+        assert result["label"]["recommended_action"] == "emergency_review"
 
 
 class ToyTokenizer:
@@ -77,18 +77,18 @@ class ToyTokenizer:
         return body
 
 
-def test_tokenize_public_binary_masks_public_risk_topic_and_handling_fields():
+def test_tokenize_public_binary_masks_risk_topic_and_action_fields():
     case = _normalize_public_binary_labels(
         {
             "task_type": "public_binary",
-            "audit_scene": {},
-            "chat_evidence_list": [],
-            "behavior_abnormal_list": [],
+            "service_context": {},
+            "conversation_evidence": [],
+            "fault_evidence": [],
             "label": {
                 "risk_level": "high_risk",
                 "final_judgment": "exist_violation",
                 "handling_suggestion": "ban_account",
-                "topic": "诈骗引流",
+                "topic": "动力电池与热安全",
             },
         }
     )
@@ -96,12 +96,11 @@ def test_tokenize_public_binary_masks_public_risk_topic_and_handling_fields():
     tokenized = tokenize_training_case(case, tokenizer=ToyTokenizer(), rubrics={}, enable_field_mask=True)
     text = "".join(chr(i) for i in tokenized["input_ids"])
     risk_start = text.rindex('"risk_level"')
-    handling_start = text.rindex('"handling_suggestion"')
-    final_start = text.rindex('"final_judgment"')
-    topic_start = text.rindex('"topic"')
+    action_start = text.rindex('"recommended_action"')
+    judgment_start = text.rindex('"event_judgment"')
+    topic_start = text.rindex('"event_topic"')
 
     assert tokenized["completion_mask"][risk_start] == 0
-    assert tokenized["completion_mask"][handling_start] == 0
-    # P2-37：公开数据只监督 final_judgment + 文本字段，topic 一并屏蔽。
+    assert tokenized["completion_mask"][action_start] == 0
     assert tokenized["completion_mask"][topic_start] == 0
-    assert tokenized["completion_mask"][final_start] == 1
+    assert tokenized["completion_mask"][judgment_start] == 1

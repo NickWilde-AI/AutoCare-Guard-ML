@@ -1,38 +1,33 @@
 model:
-  # 统一模型口径（2026-08-18 定稿）：主模型 Qwen3-32B，LoRA 多任务 SFT。
+  # 统一模型口径：主模型 Qwen3-32B，LoRA 多任务 SFT。
   base_model: Qwen/Qwen3-32B
   max_seq_length: 8192
-  max_new_tokens: 384
+  max_new_tokens: 512
   do_sample: false
 
 versions:
-  # 与 configs/model_registry.yaml 的 current_stable 保持一致。
   model_version: heuristic-public-v0
-  prompt_version: prompt-v1
-  rubric_version: rubric-v1
-  feature_schema_version: feature-schema-v1
-  postprocess_version: postprocess-v1
+  prompt_version: prompt-autocare-v1
+  rubric_version: rubric-autocare-v1
+  feature_schema_version: feature-schema-autocare-v1
+  postprocess_version: postprocess-autocare-v1
 
 alert_thresholds:
-  # ban_account_rate：ban 占全部请求比例的告警阈值；
-  # 与 rollout.yaml 的 ban_account_fpr（gold 非违规中被误判 ban 的比例红线 0.03）
-  # 分母口径不同，勿混用（P2-45）。
-  ban_account_rate_warn: 0.08
-  ban_account_rate_critical: 0.12
+  # emergency_review_rate：紧急建议占全部请求比例（与 FPR 分母不同，勿混用）。
+  emergency_review_rate_warn: 0.05
+  emergency_review_rate_critical: 0.08
   parse_non_ok_rate_warn: 0.005
   parse_non_ok_rate_critical: 0.02
-  empty_behavior_rate_warn: 0.05
-  empty_behavior_rate_critical: 0.15
-  gift_total_value_mean_delta_warn: 1000.0
-  gift_total_value_mean_delta_critical: 3000.0
+  missing_vehicle_evidence_rate_warn: 0.08
+  missing_vehicle_evidence_rate_critical: 0.20
+  missing_vehicle_evidence_mean_delta_warn: 0.08
+  missing_vehicle_evidence_mean_delta_critical: 0.20
 
 training:
-  output_dir: outputs/im-audit-judge
+  output_dir: outputs/autocare-risk-judge
   num_train_epochs: 2
-  # 统一模型口径（2026-08-18 定稿）：LoRA 学习率 1e-4。
   learning_rate: 0.0001
   per_device_train_batch_size: 4
-  # 4 x 16 = 全局 Batch Size 64，与定稿口径一致。
   gradient_accumulation_steps: 16
   warmup_ratio: 0.03
   bf16: true
@@ -45,42 +40,93 @@ training:
     r: 16
     lora_alpha: 32
     lora_dropout: 0.05
-    # 统一模型口径（2026-08-18 定稿）：仅注意力线性层。
     target_modules: [q_proj, k_proj, v_proj, o_proj]
     qlora_4bit: false
 
 labels:
   risk_levels: [low_risk, mid_risk, high_risk]
-  judgments: [not_exist_violation, exist_violation]
-  handling_suggestions: [ignore, warning, limit_account, ban_account]
+  event_judgments: [risk_event, not_risk_event, insufficient_evidence]
+  recommended_actions:
+    - information_reply
+    - collect_more_evidence
+    - service_followup
+    - create_work_order
+    - expert_review
+    - emergency_review
+  event_topics:
+    - 动力电池与热安全
+    - 充电与高压系统异常
+    - 制动与转向异常
+    - 行驶中动力异常
+    - 智能驾驶与驾驶辅助反馈
+    - 车机、座舱和远程控车故障
+    - 重复维修与问题未解决
+    - 道路救援与人员安全
+    - 质保、零部件与服务争议
+    - 无风险事件
+  # 兼容旧测试/API 键名（与上面同值）
+  judgments: [risk_event, not_risk_event, insufficient_evidence]
+  handling_suggestions:
+    - information_reply
+    - collect_more_evidence
+    - service_followup
+    - create_work_order
+    - expert_review
+    - emergency_review
   topics:
-    - 代刷/包榜
-    - 色情诱导
-    - 诈骗引流
-    - 私下交易
-    - 政治敏感
-    - 辱骂攻击
-    - 未成年保护
-    - 版权侵犯
-    - 虚假信息
-    - 自伤诱导
-    - 违禁品交易
-    - 无主题
+    - 动力电池与热安全
+    - 充电与高压系统异常
+    - 制动与转向异常
+    - 行驶中动力异常
+    - 智能驾驶与驾驶辅助反馈
+    - 车机、座舱和远程控车故障
+    - 重复维修与问题未解决
+    - 道路救援与人员安全
+    - 质保、零部件与服务争议
+    - 无风险事件
 
 rubrics:
   __default__: |
-    low_risk: 风险极低，日常社交或证据不足；
-    mid_risk: 中等风险，语义或行为存在倾向但证据链不完整；
-    high_risk: 高风险，语义和行为双证据链完整，或属于明确禁止类目。
-  代刷/包榜: |
-    low_risk: 仅讨论榜单玩法或正常送礼，无代刷意向；
-    mid_risk: 暗示冲榜、返利、互送或老规矩，但金额、时间、对象不完整；
-    high_risk: 明确约定金额、榜单位次或时间，且行为侧出现突发大额打赏。
-  诈骗引流: |
-    low_risk: 普通社交联系方式交换，无收益承诺或欺骗要素；
-    mid_risk: 出现外部联系方式、项目收益暗示或批量投递迹象；
-    high_risk: 明确诱导转外部平台并承诺收益、索取本金、押金或敏感信息。
-  私下交易: |
-    low_risk: 平台内正常消费咨询；
-    mid_risk: 试探私下折扣、外部结算或规避平台抽成；
-    high_risk: 明确达成平台外交易、收款方式、金额或交付安排。
+    low_risk: 普通咨询、轻微体验问题，或已有证据明确不构成安全风险；
+    mid_risk: 存在明确异常或重复问题，需要工单、补采或专家排查；
+    high_risk: 可能影响人员、行车、高压或热安全，需要优先人工确认。
+  动力电池与热安全: |
+    low_risk: 续航咨询或正常温升范围内的体验问题；
+    mid_risk: 出现电池相关告警或异常温差，但车辆已安全停放且无人员暴露；
+    high_risk: 焦糊味、冒烟、热失控迹象或行驶/充电中伴随严重热安全证据。
+  充电与高压系统异常: |
+    low_risk: 预约充电设置、桩兼容性等使用咨询；
+    mid_risk: 多次充电中断或高压告警，当前无立即现场危险；
+    high_risk: 充电中断伴随高压/热安全证据，或存在人员暴露风险。
+  制动与转向异常: |
+    low_risk: 轻微异响咨询且车辆侧无告警；
+    mid_risk: 重复制动/转向告警，车辆可控停放；
+    high_risk: 行驶中制动失效/转向异常等行车风险证据。
+  行驶中动力异常: |
+    low_risk: 动力体感咨询且无告警；
+    mid_risk: 动力中断或跛行告警，但已停放；
+    high_risk: 行驶中动力突然中断并伴随安全风险证据。
+  智能驾驶与驾驶辅助反馈: |
+    low_risk: 功能体验吐槽，无同期车辆告警；
+    mid_risk: 误制动/突然减速等描述且有功能状态摘要印证；
+    high_risk: 行驶中智驾异常并存在人身或行车风险的车辆侧证据。
+  车机、座舱和远程控车故障: |
+    low_risk: 车机卡顿、账号登录等体验问题；
+    mid_risk: 远程控车失败或重复故障影响服务；
+    high_risk: 远程控车异常与车辆安全状态冲突且证据充分（仍不直接控车）。
+  重复维修与问题未解决: |
+    low_risk: 首次咨询历史工单进度；
+    mid_risk: 同类问题重复出现，需工单或专家排查；
+    high_risk: 重复未解决且当前存在安全相关车辆证据。
+  道路救援与人员安全: |
+    low_risk: 救援流程咨询；
+    mid_risk: 需要道路救援但人员已脱离危险；
+    high_risk: 人员或行车安全正在受影响，需紧急人工确认。
+  质保、零部件与服务争议: |
+    low_risk: 质保政策咨询；
+    mid_risk: 争议需服务升级标记与工单跟进；
+    high_risk: 争议同时伴随明确车辆安全证据（安全与客诉分流处理）。
+  无风险事件: |
+    low_risk: 明确无风险或证据足以排除安全风险；
+    mid_risk: 不适用；
+    high_risk: 不适用。

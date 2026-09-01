@@ -18,188 +18,142 @@ class HeuristicJudge:
     rubrics: dict[str, str]
 
     def predict(self, case: dict[str, Any]) -> dict[str, Any]:
+        from .schema import ServiceCase
+
+        service_case = ServiceCase.from_dict(case)
         text = " ".join(
-            [str(case.get("audit_scene", ""))]
-            + [str(x) for x in case.get("chat_evidence_list", [])]
-            + [str(x) for x in case.get("behavior_abnormal_list", [])]
+            [
+                str(service_case.service_context),
+                str(service_case.conversation_evidence),
+                str(service_case.vehicle_signal_summary),
+                str(service_case.fault_evidence),
+                str(service_case.service_history_summary),
+            ]
         ).lower()
-        # 主题关键词检测（覆盖全部 11 种违规主题，中英文关键词）
-        brush = any(k in text for k in [
-            "代刷", "dai刷", "代chong", "包榜", "冲榜", "冲bang", "冲一下榜", "日ban", "周ban",
-            "榜单", "周榜", "月榜", "日榜", "老规矩", "顶上去", "顶一下", "包一下", "包你", "全包",
-            "出钱你出号", "三七分", "对半分", "冲前", "保第一", "保底",
-        ])
-        minor = any(k in text for k in [
-            "未成年", "小学", "初中", "高中生", "小朋友", "几年级", "上几年级", "今年多大", "多大了",
-            "13岁", "14岁", "15岁", "16岁", "未满18", "你是学生", "还在上学", "放学", "校服", "压岁钱",
-            # English
-            "underage", "minor", "child abuse", "child exploit", "pedophil", "groom",
-            "young girl", "young boy", "lolita", "preteen",
-        ])
-        self_harm = any(k in text for k in [
-            "自杀", "自残", "割腕", "跳楼", "活着没意思", "不想活", "不想活了", "结束生命",
-            "离开这个世界", "世界不需要我", "想轻生", "怎么自残", "解脱",
-            # English
-            "suicide", "self-harm", "kill myself", "end my life", "cut myself", "want to die",
-            "how to hang", "overdose", "slit my wrist", "jump off",
-        ])
-        contraband = any(k in text for k in [
-            "违禁", "枪支", "枪zhi", "毒品", "管制刀具", "管制器具", "迷药", "迷魂药", "麻古",
-            "弹药", "仿真枪", "催情", "听话水", "黑灰产", "卡料", "料子", "实弹",
-            # English
-            "illegal weapon", "firearm", "buy gun", "sell gun", "make a bomb", "explosive",
-            "drug deal", "cocaine", "methamphetamine", "fentanyl", "heroin",
-            "chemical weapon", "biological weapon", "ricin", "anthrax", "synthesize",
-        ])
-        porn = any(k in text for k in [
-            "色情", "不雅", "看pian", "看片", "小jj", "约pao", "一夜情", "裸聊", "福利视频",
-            "私密视频", "那种视频", "那种照片", "资源都有", "全套资源", "成人", "黄色", "涩涩",
-            # English
-            "porn", "nude", "nsfw", "sexual content", "explicit", "erotic",
-            "sex video", "onlyfans", "escort", "prostitut",
-        ])
-        politics = any(k in text for k in [
-            "政治", "政治敏感", "反动", "颠覆", "分裂", "邪教", "敏感话题", "敏感事件",
-            "境外势力", "煽动", "游行", "示威", "敏感人物",
-            # English
-            "overthrow government", "insurrection", "terrorism", "terrorist attack",
-            "extremist", "radicalize", "violent protest", "assassination",
-        ])
-        gamble = any(k in text for k in [
-            "棋牌", "押注", "下注", "走势", "走势图", "跟单", "跟计划", "BC平台", "bc平台", "jc群",
-            "pg平台", "博彩", "彩票", "时时彩", "六合", "提现", "充100送100", "稳赢", "命中率", "回血",
-            # English
-            "gambling", "casino", "bet online", "poker site", "slot machine",
-        ])
-        fraud = any(k in text for k in [
-            "私V", "私v", "稳赚", "本金", "加微信", "加我", "加V", "加v", "v信", "vx", "威信",
-            "日入", "日结", "兼zhi", "兼职", "漏dong", "漏洞", "躺赚", "外快", "投资渠道", "回报率",
-            "保本保息", "上车", "稳定收入", "扫码加", "带你赚", "躺着赚", "项目介绍", "低价充值",
-            # English
-            "phishing", "scam", "ponzi", "pyramid scheme", "nigerian prince",
-            "send me money", "wire transfer", "steal identity", "credit card fraud",
-            "social engineering", "impersonat",
-        ])
-        trade = any(k in text for k in [
-            "私下", "私下交易", "折扣", "打八折", "打折", "外部", "走外部", "收款", "收款码",
-            "转账", "转我", "转支付宝", "发红包", "不走平台", "别在平台", "省手续费", "省下手续费",
-            "平台抽成", "平台扣", "私下转", "走平台太贵",
-        ])
-        copyright_v = any(k in text for k in [
-            "盗版", "破解版", "破解软件", "免费看", "免费资源", "翻录", "搬运", "盗播",
-            "付费内容", "原价", "资源共享", "网盘资源", "账号共享", "车队", "拼车会员", "共享会员",
-            # English
-            "piracy", "pirated", "crack software", "torrent", "illegal download",
-            "copyright infring", "dmca", "stolen content", "rip movie",
-        ])
-        fake_info = any(k in text for k in [
-            "虚假", "谣言", "假新闻", "编造", "不实", "中奖", "恭喜你中", "官方通知", "冒充官方",
-            "客服通知", "账号异常", "点击领取", "免费领", "扫码领奖", "内部消息",
-            # English
-            "fake news", "misinformation", "disinformation", "conspiracy", "hoax",
-            "false claim", "fabricat", "deepfake", "manipulat",
-        ])
-        abuse = any(k in text for k in [
-            "傻逼", "sb", "去死", "垃圾", "贱人", "废物", "脑残", "智障", "滚", "滚蛋", "你妈",
-            "畜生", "恶心", "丑", "怪不得没人看", "不要脸",
-            # English
-            "hate speech", "racial slur", "nigger", "faggot", "kill you",
-            "death threat", "i will hurt", "harass",
-        ])
 
-        high_behavior = any(k in text for k in ["极大额", "大额", "高频", "批量", "短时间", "突发性"])
-        gift_value = _gift_total_value(case)
+        battery = any(k in text for k in ["电池", "热失控", "冒烟", "焦糊", "温升", "thermal", "battery"])
+        charging = any(k in text for k in ["充电", "充不上", "高压", "charging", "hv "])
+        brake = any(k in text for k in ["制动", "刹车", "转向", "brake", "steering"])
+        powertrain = any(k in text for k in ["动力中断", "跛行", "突然没力", "power loss"])
+        adas = any(k in text for k in ["智驾", "辅助驾驶", "误刹", "突然减速", "接管", "adas", "autopilot"])
+        cockpit = any(k in text for k in ["车机", "座舱", "远程控车", "app控车"])
+        repeat = any(k in text for k in ["重复维修", "一直没修好", "多次进店", "反复"])
+        rescue = any(k in text for k in ["救援", "拖车", "高速抛锚", "人员受伤"])
+        warranty = any(k in text for k in ["质保", "零件", "索赔", "服务态度"])
 
-        # 主题优先级判定：强禁类目（一票否决）优先于泛化的引流/交易类，
-        # 避免"加我看片"这类被诈骗/交易关键词抢先吞掉。
-        # 统一口径（2026-08-18 定稿）：11 类一级主题，赌博/博彩引流归入"诈骗引流"。
-        topic = "无主题"
-        if minor:
-            topic = "未成年保护"
-        elif self_harm:
-            topic = "自伤诱导"
-        elif contraband:
-            topic = "违禁品交易"
-        elif porn:
-            topic = "色情诱导"
-        elif politics:
-            topic = "政治敏感"
-        elif brush:
-            topic = "代刷/包榜"
-        elif gamble or fraud:
-            topic = "诈骗引流"
-        elif trade:
-            topic = "私下交易"
-        elif copyright_v:
-            topic = "版权侵犯"
-        elif fake_info:
-            topic = "虚假信息"
-        elif abuse:
-            topic = "辱骂攻击"
+        topic = "无风险事件"
+        if battery:
+            topic = "动力电池与热安全"
+        elif charging:
+            topic = "充电与高压系统异常"
+        elif brake:
+            topic = "制动与转向异常"
+        elif powertrain:
+            topic = "行驶中动力异常"
+        elif adas:
+            topic = "智能驾驶与驾驶辅助反馈"
+        elif rescue:
+            topic = "道路救援与人员安全"
+        elif cockpit:
+            topic = "车机、座舱和远程控车故障"
+        elif repeat:
+            topic = "重复维修与问题未解决"
+        elif warranty:
+            topic = "质保、零部件与服务争议"
 
-        semantic_hit = any([brush, fraud, trade, gamble, porn, politics, abuse, minor, copyright_v, fake_info, self_harm, contraband])
-        violation = semantic_hit or (high_behavior and gift_value >= 5000)
-
-        # 严重程度判断：强禁类目直接高风险；引流/交易类需行为或金额印证才升高。
-        # P2-21：trade/copyright/fake_info/abuse 在行为+金额印证时也可达 high，
-        # 与 rubric 的"明确约定 + 行为印证"口径一致。
-        high = violation and (
-            gift_value >= 5000
-            or (fraud and high_behavior)
-            or (brush and high_behavior)
-            or (gamble and high_behavior)
-            or ((trade or copyright_v or fake_info or abuse) and high_behavior)
-            or porn
-            or politics
-            or self_harm
-            or contraband
-            or minor
+        vehicle_hit = service_case.has_vehicle_side_evidence()
+        motion = str(service_case.vehicle_context.get("vehicle_motion_state") or "").lower()
+        driving = motion in {"driving", "行驶"}
+        critical_tokens = any(
+            k in text for k in ["焦糊", "冒烟", "失控", "失效", "人员", "高速", "热失控", "冒火花"]
         )
-        mid = violation and not high
-        # P2-21：mid 且无强行为/大额印证 → 轻度/首次风险走 warning；否则 limit。
-        handling = (
-            "ban_account"
-            if high
-            else ("limit_account" if (mid and (high_behavior or gift_value >= 5000)) else "warning")
+        semantic_hit = any(
+            [battery, charging, brake, powertrain, adas, cockpit, repeat, rescue, warranty]
         )
 
-        if not violation:
+        missing = service_case.missing_and_conflicts or {}
+        severe_missing = bool(missing.get("missing_fields")) and semantic_hit and not vehicle_hit
+
+        if severe_missing:
+            return {
+                "risk_level": "mid_risk",
+                "event_topic": topic,
+                "event_judgment": "insufficient_evidence",
+                "recommended_action": "collect_more_evidence",
+                "evidence_refs": [],
+                "correlation_analysis": "用户描述存在潜在风险，但车辆侧证据不足或冲突，不能判定成立。",
+                "uncertainty_reason": "关键车辆证据缺失或无法时间对齐。",
+                "service_escalation_flags": [],
+                "confidence": 0.7,
+            }
+
+        if not semantic_hit and not vehicle_hit:
             return {
                 "risk_level": "low_risk",
-                "topic": topic,
-                "correlation_analysis": "聊天内容与行为证据未形成明确违规链条。",
-                "final_judgment": "not_exist_violation",
-                "judgment_basis": "未发现明确违规话术或可印证的异常行为。",
-                "handling_suggestion": "ignore",
+                "event_topic": "无风险事件",
+                "event_judgment": "not_risk_event",
+                "recommended_action": "information_reply",
+                "evidence_refs": [],
+                "correlation_analysis": "对话与车辆侧摘要未形成需要介入的风险事件。",
+                "uncertainty_reason": "",
+                "service_escalation_flags": [],
                 "confidence": 0.85,
             }
-        # P2-21：纯行为触发（无语义命中）时，依据文本不得声称"命中违规语义要点"。
-        basis = (
-            "命中违规语义要点，并存在行为侧或上下文证据支撑。"
-            if semantic_hit
-            else "存在异常行为证据（高频/大额等），但未识别到明确违规话术，建议人工复核。"
-        )
+
+        high = bool(vehicle_hit and critical_tokens and (driving or charging or battery or brake or rescue))
+        mid = semantic_hit or vehicle_hit
+        if high:
+            risk, judgment, action = "high_risk", "risk_event", "emergency_review"
+        elif mid and vehicle_hit:
+            risk, judgment, action = "mid_risk", "risk_event", "create_work_order"
+        elif mid:
+            risk, judgment, action = "mid_risk", "risk_event", "expert_review"
+        else:
+            risk, judgment, action = "low_risk", "not_risk_event", "information_reply"
+
+        refs: list[dict[str, Any]] = []
+        if service_case.conversation_evidence:
+            refs.append(
+                {
+                    "source": "conversation_evidence",
+                    "index": 0,
+                    "field": "content",
+                    "supports": "event_judgment",
+                }
+            )
+        if vehicle_hit and service_case.fault_evidence:
+            refs.append(
+                {
+                    "source": "fault_evidence",
+                    "index": 0,
+                    "field": "severity_from_source",
+                    "supports": "risk_level",
+                }
+            )
+        elif vehicle_hit:
+            refs.append(
+                {
+                    "source": "vehicle_signal_summary",
+                    "field": "warning_lights",
+                    "supports": "risk_level",
+                }
+            )
+
         return {
-            "risk_level": "high_risk" if high else "mid_risk",
-            "topic": topic,
-            "correlation_analysis": "聊天语义与行为异常存在同向印证，具备违规风险。",
-            "final_judgment": "exist_violation",
-            "judgment_basis": basis,
-            "handling_suggestion": handling,
-            "confidence": 0.95 if high else 0.88,
+            "risk_level": risk,
+            "event_topic": topic,
+            "event_judgment": judgment,
+            "recommended_action": action,
+            "evidence_refs": refs,
+            "correlation_analysis": "对话描述与车辆侧摘要/故障证据形成同向或需人工复核的关联。",
+            "uncertainty_reason": "",
+            "service_escalation_flags": [],
+            "confidence": 0.92 if high else 0.84,
         }
 
 
-def _gift_total_value(case: dict[str, Any]) -> float:
-    summary = case.get("audit_scene", {}).get("behavior_key_summary", {})
-    try:
-        return float(summary.get("gift_total_value", 0) or 0)
-    except (TypeError, ValueError):
-        return 0.0
-
-
 class TransformersJudge:
-    def __init__(self, model_path: str, rubrics: dict[str, str], max_new_tokens: int = 384):
+    def __init__(self, model_path: str, rubrics: dict[str, str], max_new_tokens: int = 512):
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -249,7 +203,7 @@ class APIJudge:
         model: str = "qwen-plus",
         api_base: str | None = None,
         api_key: str | None = None,
-        max_tokens: int = 384,
+        max_tokens: int = 512,
         temperature: float = 0.0,
     ):
         self.rubrics = rubrics
@@ -289,10 +243,12 @@ class APIJudge:
             logger.error("API Judge failed: %s", e)
             return {
                 "risk_level": "low_risk",
-                "topic": "无主题",
+                "event_topic": "无风险事件",
                 "correlation_analysis": f"API 调用失败: {e}",
-                "final_judgment": "not_exist_violation",
-                "judgment_basis": "API 异常，默认安全。",
-                "handling_suggestion": "ignore",
+                "event_judgment": "not_risk_event",
+                "uncertainty_reason": "API 异常，默认无风险。",
+                "recommended_action": "information_reply",
+                "evidence_refs": [],
+                "service_escalation_flags": [],
             }
 

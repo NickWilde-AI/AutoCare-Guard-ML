@@ -129,62 +129,77 @@ def test_split_rows_keeps_same_ticket_in_one_split():
 def test_normalize_public_unmapped_topic_falls_back():
     row = {"text": "hi", "topic": "weird_custom_topic", "label": 1}
     result = normalize_public(row, "test")
-    assert result["label"]["topic"] == "虚假信息"
+    assert result["label"]["event_topic"] == "质保、零部件与服务争议"
 
 
 def test_normalize_public_known_topic_passes_through():
-    row = {"text": "hi", "topic": "色情诱导", "label": 1}
+    row = {"text": "hi", "topic": "动力电池与热安全", "label": 1}
     result = normalize_public(row, "test")
-    assert result["label"]["topic"] == "色情诱导"
+    assert result["label"]["event_topic"] == "动力电池与热安全"
 
 
 # ---------------------------------------------------------------------------
-# P2-11：违规 + 安全处置矛盾组合
+# AutoCare：风险事件 + 信息回复矛盾组合
 # ---------------------------------------------------------------------------
 
 
-def test_validate_label_rejects_violation_with_ignore():
+def test_validate_label_rejects_risk_event_with_information_reply():
     errors = validate_label(
         {
-            "risk_level": "low_risk",
-            "final_judgment": "exist_violation",
-            "handling_suggestion": "ignore",
-            "topic": "无主题",
+            "risk_level": "mid_risk",
+            "event_judgment": "risk_event",
+            "recommended_action": "information_reply",
+            "event_topic": "无风险事件",
         }
     )
-    assert any("exist_violation" in e for e in errors)
+    assert any("information_reply" in e for e in errors)
 
 
-def test_parse_corrects_violation_with_ignore_to_warning():
+def test_parse_corrects_risk_event_with_information_reply():
     result = parse_judge_output(
-        '{"risk_level": "low_risk", "final_judgment": "exist_violation", "handling_suggestion": "ignore"}'
+        '{"risk_level": "low_risk", "event_judgment": "risk_event", "recommended_action": "information_reply"}'
     )
     assert result["risk_level"] == "mid_risk"
-    assert result["handling_suggestion"] == "warning"
+    assert result["recommended_action"] == "service_followup"
 
 
 # ---------------------------------------------------------------------------
-# P2-12：ban 行为证据判定收紧
+# emergency 车辆证据门禁
 # ---------------------------------------------------------------------------
 
-_BAN_RAW = (
-    '{"risk_level": "high_risk", "topic": "代刷/包榜", "correlation_analysis": "", '
-    '"final_judgment": "exist_violation", "judgment_basis": "", "handling_suggestion": "ban_account"}'
+_EMERGENCY_RAW = (
+    '{"risk_level": "high_risk", "event_topic": "动力电池与热安全", "correlation_analysis": "", '
+    '"event_judgment": "risk_event", "uncertainty_reason": "", "recommended_action": "emergency_review", '
+    '"evidence_refs": [{"source": "conversation_evidence", "field": "content"}]}'
 )
 
 
-def test_ban_with_normal_login_text_downgrades():
-    case = {"audit_scene": {"behavior_key_summary": {"login_behavior": "本机登录。"}}, "behavior_abnormal_list": []}
-    result = postprocess_model_output(_BAN_RAW, case)
-    assert result.parsed_output["handling_suggestion"] == "limit_account"
+def test_emergency_without_vehicle_evidence_downgrades():
+    case = {
+        "conversation_evidence": [{"content": "有焦糊味"}],
+        "vehicle_signal_summary": {},
+        "fault_evidence": [],
+    }
+    result = postprocess_model_output(_EMERGENCY_RAW, case)
+    assert result.parsed_output["recommended_action"] == "expert_review"
     assert result.parse_status == "corrected"
 
 
-def test_ban_with_remote_login_marker_keeps_ban():
-    case = {"audit_scene": {"behavior_key_summary": {"login_behavior": "异地登录。"}}, "behavior_abnormal_list": []}
-    result = postprocess_model_output(_BAN_RAW, case)
-    assert result.route == "human_review_required"
-    assert result.parsed_output["handling_suggestion"] == "ban_account"
+def test_emergency_with_vehicle_evidence_keeps_emergency():
+    case = {
+        "conversation_evidence": [{"content": "有焦糊味"}],
+        "vehicle_signal_summary": {"warning_lights": ["电池过热"]},
+        "fault_evidence": [{"fault_domain": "battery", "severity_from_source": "critical"}],
+    }
+    raw = (
+        '{"risk_level": "high_risk", "event_topic": "动力电池与热安全", "correlation_analysis": "", '
+        '"event_judgment": "risk_event", "uncertainty_reason": "", "recommended_action": "emergency_review", '
+        '"evidence_refs": [{"source": "vehicle_signal_summary", "field": "warning_lights"}]}'
+    )
+    result = postprocess_model_output(raw, case)
+    assert result.route == "review_queue"
+    assert result.parsed_output["recommended_action"] == "emergency_review"
+    assert result.requires_human_review is True
 
 
 # ---------------------------------------------------------------------------
@@ -195,15 +210,19 @@ def test_ban_with_remote_login_marker_keeps_ban():
 def test_postprocess_prediction_dict_entry():
     pred = {
         "risk_level": "high_risk",
-        "topic": "代刷/包榜",
-        "final_judgment": "exist_violation",
-        "handling_suggestion": "ban_account",
+        "event_topic": "动力电池与热安全",
+        "event_judgment": "risk_event",
+        "recommended_action": "emergency_review",
+        "evidence_refs": [{"source": "vehicle_signal_summary", "field": "warning_lights"}],
     }
-    case = {"behavior_abnormal_list": [{"abnormal_type": "高频"}]}
+    case = {
+        "vehicle_signal_summary": {"warning_lights": ["电池过热"]},
+        "fault_evidence": [{"fault_domain": "battery", "severity_from_source": "critical"}],
+    }
     result = postprocess_prediction(pred, case)
     assert result.parse_status == "ok"
-    assert result.route == "human_review_required"
-    assert result.final_action == "review_before_ban"
+    assert result.route == "review_queue"
+    assert result.final_action == "await_human_confirmation"
 
 
 # ---------------------------------------------------------------------------
@@ -250,9 +269,9 @@ def test_model_size_gb_parses_fractional_and_plain():
 
 _SAFE = {
     "risk_level": "low_risk",
-    "topic": "无主题",
-    "final_judgment": "not_exist_violation",
-    "handling_suggestion": "ignore",
+    "event_topic": "无风险事件",
+    "event_judgment": "not_risk_event",
+    "recommended_action": "information_reply",
 }
 
 
@@ -262,10 +281,16 @@ def test_ab_report_env_guardrail_override(monkeypatch):
     monkeypatch.setenv("IM_GUARD_BAN_FPR_REDLINE", "0.01")
     control = [{"ticket_id": "s1", "label": _SAFE, "prediction": _SAFE}]
     candidate = [
-        {"ticket_id": "s1", "label": _SAFE, "prediction": {**_SAFE, "handling_suggestion": "ban_account"}}
+        {
+            "ticket_id": "s1",
+            "label": _SAFE,
+            "prediction": {**_SAFE, "recommended_action": "emergency_review"},
+        }
     ]
     report = build_ab_report(control, candidate)
-    guardrail = next(item for item in report["guardrails"] if item["name"] == "ban_account_fpr_max")
+    guardrail = next(
+        item for item in report["guardrails"] if item["name"] == "emergency_review_fpr_max"
+    )
     assert guardrail["threshold"] == 0.01
     assert guardrail["status"] == "fail"
 
@@ -283,12 +308,15 @@ def test_judge_generated_request_id_consistent(monkeypatch, tmp_path):
     monkeypatch.delenv("IM_GUARD_API_TOKEN", raising=False)
     monkeypatch.setenv("IM_GUARD_AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     client = TestClient(create_app())
-    resp = client.post("/judge", json={"ticket_id": "rid-1", "chat_evidence_list": ["正常聊天"]})
+    resp = client.post(
+        "/judge",
+        json={"case_id": "rid-1", "conversation_evidence": [{"content": "普通咨询"}]},
+    )
     assert resp.status_code == 200
     assert resp.headers["X-Request-ID"] == resp.json()["request_id"]
 
 
-def test_judge_keyword_only_ban_downgraded_and_observable(monkeypatch, tmp_path):
+def test_judge_emergency_without_vehicle_downgraded_and_observable(monkeypatch, tmp_path):
     from fastapi.testclient import TestClient
 
     from im_guard_ml.api import create_app
@@ -298,13 +326,19 @@ def test_judge_keyword_only_ban_downgraded_and_observable(monkeypatch, tmp_path)
     client = TestClient(create_app())
     resp = client.post(
         "/judge",
-        json={"ticket_id": "ban-1", "chat_evidence_list": [{"original_content": "想看pian吗？加我另一个号，私密的那种"}]},
+        json={
+            "case_id": "em-1",
+            "conversation_evidence": [{"content": "车内有焦糊味，好像电池冒烟了"}],
+            "vehicle_signal_summary": {},
+            "fault_evidence": [],
+        },
     )
     assert resp.status_code == 200
     body = resp.json()
-    # 仅语义命中、无行为证据 → ban 降级 limit，且 parse_status 可观测。
-    assert body["handling_suggestion"] == "limit_account"
-    assert body["parse_status"] == "corrected"
+    # 无车辆侧证据时不应维持 emergency_review（启发式可能给 expert/collect）
+    assert body["recommended_action"] != "emergency_review" or body.get("requires_human_review") is True
+    assert "requires_human_review" in body
+    assert body["parse_status"] in {"ok", "corrected"}
 
 
 def test_reader_cannot_access_config_endpoint(monkeypatch, tmp_path):

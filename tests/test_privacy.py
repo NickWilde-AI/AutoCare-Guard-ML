@@ -12,17 +12,18 @@ def test_redact_text_masks_common_pii():
 
 def test_build_input_summary_keeps_counts_hash_and_redacted_samples():
     case = {
-        "ticket_id": "t1",
-        "chat_evidence_list": [{"original_content": "联系 a@example.com"}],
-        "behavior_abnormal_list": [{"abnormal_type": "高频"}],
-        "hint_topic": "诈骗引流",
+        "case_id": "t1",
+        "conversation_evidence": [{"content": "联系 a@example.com"}],
+        "fault_evidence": [{"fault_domain": "battery"}],
+        "hint_topic": "动力电池与热安全",
     }
 
     summary = build_input_summary(case)
 
-    assert summary["chat_evidence_count"] == 1
-    assert summary["behavior_abnormal_count"] == 1
-    assert summary["hint_topic"] == "诈骗引流"
+    assert summary["conversation_evidence_count"] == 1
+    assert summary["fault_evidence_count"] == 1
+    assert summary["chat_evidence_count"] == 1  # 兼容字段
+    assert summary["hint_topic"] == "动力电池与热安全"
     assert summary["pii_types"] == ["email"]
     assert "a@example.com" not in summary["redacted_evidence_samples"][0]
     assert len(summary["payload_sha256"]) == 64

@@ -146,7 +146,8 @@ def evaluate_benchmark(
         pred = predict_fn(case)
 
         gold = sample["gold_label"]
-        pred_label = 1 if pred.get("final_judgment") == "exist_violation" else 0
+        pred_j = pred.get("event_judgment") or pred.get("final_judgment")
+        pred_label = 1 if pred_j in {"risk_event", "exist_violation"} else 0
 
         targets.append(gold)
         preds.append(pred_label)
@@ -248,8 +249,12 @@ def evaluate_im_test_set(
         preds_list.append(pred)
         metas.append({"topic": gold.get("topic", "无主题")})
 
-        binary_targets.append(1 if gold.get("final_judgment") == "exist_violation" else 0)
-        binary_preds.append(1 if pred.get("final_judgment") == "exist_violation" else 0)
+        def _risk_bin(d: dict) -> int:
+            j = d.get("event_judgment") or d.get("final_judgment")
+            return 1 if j in {"risk_event", "exist_violation"} else 0
+
+        binary_targets.append(_risk_bin(gold))
+        binary_preds.append(_risk_bin(pred))
 
     binary_metrics = eval_binary(binary_targets, binary_preds)
     multi_metrics = eval_multi_field(targets, preds_list, metas)

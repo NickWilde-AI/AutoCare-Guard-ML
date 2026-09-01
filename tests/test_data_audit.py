@@ -3,15 +3,18 @@ from im_guard_ml.data_audit import audit_dataset, detect_pii_types
 
 def test_detect_pii_types_finds_email_phone_and_id_card():
     row = {
-        "ticket_id": "pii-1",
-        "audit_scene": {},
-        "chat_evidence_list": [{"original_content": "邮箱 a@example.com 手机 13800138000 身份证 110101199003077771"}],
-        "behavior_abnormal_list": [],
+        "case_id": "pii-1",
+        "service_context": {},
+        "conversation_evidence": [
+            {"content": "邮箱 a@example.com 手机 13800138000 身份证 110101199003077771"}
+        ],
+        "vehicle_signal_summary": {},
+        "fault_evidence": [],
         "label": {
             "risk_level": "low_risk",
-            "topic": "无主题",
-            "final_judgment": "not_exist_violation",
-            "handling_suggestion": "ignore",
+            "event_topic": "无风险事件",
+            "event_judgment": "not_risk_event",
+            "recommended_action": "information_reply",
         },
     }
 
@@ -21,18 +24,29 @@ def test_detect_pii_types_finds_email_phone_and_id_card():
     assert report["pii_risk_by_type"]["email"] == 1
 
 
-def _case(ticket_id, *, source="internal_history", task_type=None, risk_level="low_risk", topic="无主题", judgment="not_exist_violation", handling="ignore"):
+def _case(
+    case_id,
+    *,
+    source="internal_history",
+    task_type=None,
+    risk_level="low_risk",
+    topic="无风险事件",
+    judgment="not_risk_event",
+    action="information_reply",
+):
     row = {
-        "ticket_id": ticket_id,
-        "audit_scene": {},
-        "chat_evidence_list": [f"普通聊天 {ticket_id}"],
-        "behavior_abnormal_list": [],
+        "case_id": case_id,
+        "ticket_id": case_id,
+        "service_context": {},
+        "conversation_evidence": [{"content": f"普通咨询 {case_id}"}],
+        "vehicle_signal_summary": {},
+        "fault_evidence": [],
         "source": source,
         "label": {
             "risk_level": risk_level,
-            "topic": topic,
-            "final_judgment": judgment,
-            "handling_suggestion": handling,
+            "event_topic": topic,
+            "event_judgment": judgment,
+            "recommended_action": action,
         },
     }
     if task_type is not None:
@@ -43,9 +57,30 @@ def _case(ticket_id, *, source="internal_history", task_type=None, risk_level="l
 def test_audit_dataset_reports_source_type_and_label_distributions():
     rows = [
         _case("internal-1", source="internal_history"),
-        _case("public-1", source="xguard_train_open_200k", task_type="public_binary", risk_level="mid_risk", judgment="exist_violation", handling="warning"),
-        _case("synthetic-1", source="level_generator_high", risk_level="high_risk", topic="诈骗引流", judgment="exist_violation", handling="ban_account"),
-        _case("hard-1", source="refinement_hard", risk_level="mid_risk", topic="诈骗引流", judgment="exist_violation", handling="warning"),
+        _case(
+            "public-1",
+            source="xguard_train_open_200k",
+            task_type="public_binary",
+            risk_level="mid_risk",
+            judgment="risk_event",
+            action="service_followup",
+        ),
+        _case(
+            "synthetic-1",
+            source="level_generator_high",
+            risk_level="high_risk",
+            topic="充电与高压系统异常",
+            judgment="risk_event",
+            action="emergency_review",
+        ),
+        _case(
+            "hard-1",
+            source="refinement_hard",
+            risk_level="mid_risk",
+            topic="充电与高压系统异常",
+            judgment="risk_event",
+            action="service_followup",
+        ),
     ]
 
     report = audit_dataset(rows)
@@ -57,7 +92,8 @@ def test_audit_dataset_reports_source_type_and_label_distributions():
         "synthetic": 1,
     }
     assert report["by_risk_level"]["high_risk"] == 1
-    assert report["by_handling_suggestion"]["warning"] == 2
+    action_dist = report.get("by_recommended_action") or report.get("by_handling_suggestion")
+    assert action_dist["service_followup"] == 2
     assert report["quality_status"] == "pass"
 
 
@@ -67,5 +103,5 @@ def test_audit_dataset_warns_when_large_dataset_is_severely_imbalanced():
     report = audit_dataset(rows)
 
     assert report["quality_status"] == "pass"
-    assert any(item["field"] == "final_judgment" for item in report["distribution_warnings"])
-    assert any(item["field"] == "handling_suggestion" for item in report["distribution_warnings"])
+    warning_fields = {item["field"] for item in report["distribution_warnings"]}
+    assert warning_fields & {"event_judgment", "final_judgment", "recommended_action", "handling_suggestion"}

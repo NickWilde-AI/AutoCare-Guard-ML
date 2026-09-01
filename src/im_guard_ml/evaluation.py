@@ -4,7 +4,16 @@ from collections import defaultdict
 from typing import Any, Sequence
 
 RISK_LABELS = ["low_risk", "mid_risk", "high_risk"]
-HANDLING_LABELS = ["ignore", "warning", "limit_account", "ban_account"]
+HANDLING_LABELS = [
+    "information_reply",
+    "collect_more_evidence",
+    "service_followup",
+    "create_work_order",
+    "expert_review",
+    "emergency_review",
+]
+ACTION_LABELS = HANDLING_LABELS
+JUDGMENT_LABELS = ["risk_event", "not_risk_event", "insufficient_evidence"]
 
 
 def eval_binary(targets: list[int], preds: list[int], probs: list[float] | None = None) -> dict[str, float | None]:
@@ -50,19 +59,42 @@ def confusion_matrix(targets: Sequence[str], preds: Sequence[str], labels: Seque
 
 def eval_multi_field(targets: list[dict[str, Any]], preds: list[dict[str, Any]], metas: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     metas = metas or [{} for _ in targets]
+
+    def _action(d: dict[str, Any]) -> str:
+        return d.get("recommended_action") or d.get("handling_suggestion", "")
+
+    def _judgment(d: dict[str, Any]) -> str:
+        return d.get("event_judgment") or d.get("final_judgment", "")
+
+    def _topic(d: dict[str, Any]) -> str:
+        return d.get("event_topic") or d.get("topic", "unknown")
+
     risk_t = [t["risk_level"] for t in targets]
     risk_p = [p["risk_level"] for p in preds]
-    hand_t = [t["handling_suggestion"] for t in targets]
-    hand_p = [p["handling_suggestion"] for p in preds]
+    hand_t = [_action(t) for t in targets]
+    hand_p = [_action(p) for p in preds]
+    judg_t = [_judgment(t) for t in targets]
+    judg_p = [_judgment(p) for p in preds]
     per_topic: dict[str, list[int]] = defaultdict(list)
     for tg, pd, meta in zip(targets, preds, metas):
-        topic = meta.get("topic", tg.get("topic", "unknown"))
+        topic = meta.get("topic") or meta.get("event_topic") or _topic(tg)
         per_topic[topic].append(int(tg["risk_level"] == pd["risk_level"]))
+
+    emergency_fp = sum(
+        1
+        for t, p in zip(targets, preds)
+        if _action(t) != "emergency_review" and _action(p) == "emergency_review"
+    )
+    emergency_tn_like = sum(1 for t in targets if _action(t) != "emergency_review") or 1
+
     return {
         "risk_macro_f1": macro_f1(risk_t, risk_p, RISK_LABELS),
-        "handling_macro_f1": macro_f1(hand_t, hand_p, HANDLING_LABELS),
+        "handling_macro_f1": macro_f1(hand_t, hand_p, ACTION_LABELS),
+        "action_macro_f1": macro_f1(hand_t, hand_p, ACTION_LABELS),
+        "judgment_macro_f1": macro_f1(judg_t, judg_p, JUDGMENT_LABELS),
+        "emergency_review_fpr": emergency_fp / emergency_tn_like,
         "risk_confusion_matrix": confusion_matrix(risk_t, risk_p, RISK_LABELS),
-        "handling_confusion_matrix": confusion_matrix(hand_t, hand_p, HANDLING_LABELS),
+        "handling_confusion_matrix": confusion_matrix(hand_t, hand_p, ACTION_LABELS),
         "risk_per_topic_acc": {k: sum(v) / len(v) for k, v in per_topic.items()},
     }
 

@@ -10,32 +10,32 @@ def _row(ticket_id, label, prediction, **extra):
 
 SAFE = {
     "risk_level": "low_risk",
-    "topic": "无主题",
-    "final_judgment": "not_exist_violation",
-    "handling_suggestion": "ignore",
+    "event_topic": "无风险事件",
+    "event_judgment": "not_risk_event",
+    "recommended_action": "information_reply",
 }
-FRAUD = {
+RISK = {
     "risk_level": "high_risk",
-    "topic": "诈骗引流",
-    "final_judgment": "exist_violation",
-    "handling_suggestion": "ban_account",
+    "event_topic": "动力电池与热安全",
+    "event_judgment": "risk_event",
+    "recommended_action": "emergency_review",
 }
-WARN = {
+FOLLOWUP = {
     "risk_level": "mid_risk",
-    "topic": "诈骗引流",
-    "final_judgment": "exist_violation",
-    "handling_suggestion": "warning",
+    "event_topic": "动力电池与热安全",
+    "event_judgment": "risk_event",
+    "recommended_action": "service_followup",
 }
 
 
 def test_build_ab_report_promotes_when_candidate_improves_and_guardrails_pass():
     control = [
         _row("safe-1", SAFE, SAFE),
-        _row("fraud-1", FRAUD, WARN),
+        _row("risk-1", RISK, FOLLOWUP),
     ]
     candidate = [
         _row("safe-1", SAFE, {**SAFE, "latency_ms": 20}),
-        _row("fraud-1", FRAUD, {**FRAUD, "latency_ms": 30}),
+        _row("risk-1", RISK, {**RISK, "latency_ms": 30}),
     ]
 
     report = build_ab_report(control, candidate)
@@ -46,20 +46,23 @@ def test_build_ab_report_promotes_when_candidate_improves_and_guardrails_pass():
     assert all(item["status"] == "pass" for item in report["guardrails"])
 
 
-def test_build_ab_report_holds_when_candidate_false_bans_safe_cases():
+def test_build_ab_report_holds_when_candidate_false_emergency_on_safe_cases():
     control = [
         _row("safe-1", SAFE, SAFE),
-        _row("fraud-1", FRAUD, FRAUD),
+        _row("risk-1", RISK, RISK),
     ]
     candidate = [
-        _row("safe-1", SAFE, {**SAFE, "handling_suggestion": "ban_account"}),
-        _row("fraud-1", FRAUD, FRAUD),
+        _row("safe-1", SAFE, {**SAFE, "recommended_action": "emergency_review"}),
+        _row("risk-1", RISK, RISK),
     ]
 
     report = build_ab_report(control, candidate)
 
     assert report["status"] == "hold"
-    assert any(item["name"] == "ban_account_fpr_max" and item["status"] == "fail" for item in report["guardrails"])
+    assert any(
+        item["name"] == "emergency_review_fpr_max" and item["status"] == "fail"
+        for item in report["guardrails"]
+    )
 
 
 def test_render_ab_report_markdown_contains_decision():
@@ -81,7 +84,19 @@ def test_cli_ab_report_writes_markdown_and_json(tmp_path):
     control.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
     candidate.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    code = main(["ab-report", "--control", str(control), "--candidate", str(candidate), "--out", str(out), "--json-out", str(json_out)])
+    code = main(
+        [
+            "ab-report",
+            "--control",
+            str(control),
+            "--candidate",
+            str(candidate),
+            "--out",
+            str(out),
+            "--json-out",
+            str(json_out),
+        ]
+    )
 
     assert code == 0
     assert "A/B 灰度对比报告" in out.read_text(encoding="utf-8")

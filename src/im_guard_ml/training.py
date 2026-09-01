@@ -7,10 +7,10 @@ from typing import Any
 from .prompting import INFER_TEMPLATE, render_assistant_label, render_user_prompt
 
 # Regex to locate JSON field spans: captures "field_name": "field_value"
-# P2-37：公开二分类数据只监督 final_judgment + 文本字段；
-# risk_level/topic/handling_suggestion 均不参与损失（主文档 5.3/5.6）。
+# 公开二分类数据只监督 event_judgment + 文本字段；
+# risk_level / event_topic / recommended_action 均不参与损失。
 _FIELD_PATTERN = re.compile(
-    r'"(risk_level|topic|handling_suggestion)"\s*:\s*"[^"]*"'
+    r'"(risk_level|event_topic|topic|recommended_action|handling_suggestion)"\s*:\s*"[^"]*"'
 )
 
 
@@ -163,25 +163,28 @@ class CompletionMaskCollator:
 def _normalize_public_binary_labels(case: dict[str, Any]) -> dict[str, Any]:
     """Cap public binary labels conservatively as a safety net.
 
-    Public binary samples lack true risk_level and handling_suggestion annotations.
-    We assign conservative placeholder values (mid_risk/warning for violations,
-    low_risk/ignore for safe) so that even if the field-level mask fails, these
-    samples cannot teach the model to predict ban_account or limit_account.
-
-    The primary defense is tokenize_training_case, which writes a completion_mask
-    that excludes risk_level and handling_suggestion tokens for public samples.
-    This normalization is the secondary fallback.
+    Public binary samples lack true risk_level and recommended_action annotations.
+    We assign conservative placeholders so that even if the field-level mask fails,
+    these samples cannot teach the model to predict emergency_review / expert_review.
     """
     if case.get("task_type") != "public_binary" or not isinstance(case.get("label"), dict):
         return case
     label = dict(case["label"])
-    if label.get("final_judgment") == "exist_violation":
+    judgment = label.get("event_judgment") or label.get("final_judgment")
+    if judgment in {"risk_event", "exist_violation"}:
         label["risk_level"] = "mid_risk"
-        label["handling_suggestion"] = "warning"
+        label["event_judgment"] = "risk_event"
+        label["recommended_action"] = "service_followup"
+        label.pop("handling_suggestion", None)
+        label.pop("final_judgment", None)
     else:
         label["risk_level"] = "low_risk"
-        label["handling_suggestion"] = "ignore"
-        label["topic"] = "无主题"
+        label["event_judgment"] = "not_risk_event"
+        label["recommended_action"] = "information_reply"
+        label["event_topic"] = "无风险事件"
+        label.pop("handling_suggestion", None)
+        label.pop("final_judgment", None)
+        label.pop("topic", None)
     case["label"] = label
     return case
 

@@ -9,7 +9,18 @@ from typing import Any
 from .schema import validate_label
 
 
-REQUIRED_FIELDS = ["ticket_id", "audit_scene", "chat_evidence_list", "behavior_abnormal_list", "label"]
+REQUIRED_FIELDS = [
+    "case_id",
+    "service_context",
+    "conversation_evidence",
+    "label",
+]
+# 兼容旧字段：若新字段缺失但旧字段存在，不记 missing
+_LEGACY_FIELD_ALIASES = {
+    "case_id": "ticket_id",
+    "service_context": "audit_scene",
+    "conversation_evidence": "chat_evidence_list",
+}
 PII_PATTERNS = {
     "email": re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"),
     "phone_cn": re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)"),
@@ -36,9 +47,9 @@ def audit_dataset(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
     for idx, row in enumerate(rows):
         for field in REQUIRED_FIELDS:
-            if field not in row:
+            if field not in row and _LEGACY_FIELD_ALIASES.get(field) not in row:
                 missing[field] += 1
-        ticket_id = str(row.get("ticket_id", f"row-{idx}"))
+        ticket_id = str(row.get("case_id") or row.get("ticket_id", f"row-{idx}"))
         if ticket_id in seen_ids:
             duplicate_ids.append(ticket_id)
         seen_ids.add(ticket_id)
@@ -50,15 +61,30 @@ def audit_dataset(rows: list[dict[str, Any]]) -> dict[str, Any]:
         source_counter[source] += 1
         source_type_counter[_source_type(row)] += 1
         label = row.get("label", {})
-        topic_counter[str(label.get("topic", "missing"))] += 1
+        topic_counter[
+            str(label.get("event_topic") or label.get("topic", "missing"))
+        ] += 1
         risk_counter[str(label.get("risk_level", "missing"))] += 1
-        judgment_counter[str(label.get("final_judgment", "missing"))] += 1
-        handling_counter[str(label.get("handling_suggestion", "missing"))] += 1
+        judgment_counter[
+            str(label.get("event_judgment") or label.get("final_judgment", "missing"))
+        ] += 1
+        handling_counter[
+            str(
+                label.get("recommended_action")
+                or label.get("handling_suggestion", "missing")
+            )
+        ] += 1
         errors = validate_label(label) if isinstance(label, dict) else ["label must be an object"]
         if errors:
             label_errors.append({"ticket_id": ticket_id, "errors": errors})
         if row.get("task_type") == "public_binary":
-            if label.get("handling_suggestion") not in {"ignore", "warning"}:
+            action = label.get("recommended_action") or label.get("handling_suggestion")
+            if action not in {
+                "information_reply",
+                "service_followup",
+                "ignore",
+                "warning",
+            }:
                 public_multitask_leaks.append(ticket_id)
         pii_hits = detect_pii_types(row)
         if pii_hits:
@@ -84,15 +110,17 @@ def audit_dataset(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "by_topic": dict(sorted(topic_counter.items())),
         "by_risk_level": dict(sorted(risk_counter.items())),
         "by_final_judgment": dict(sorted(judgment_counter.items())),
+        "by_event_judgment": dict(sorted(judgment_counter.items())),
         "by_handling_suggestion": dict(sorted(handling_counter.items())),
+        "by_recommended_action": dict(sorted(handling_counter.items())),
         "distribution_warnings": _distribution_warnings(
             len(rows),
             {
                 "source_type": source_type_counter,
                 "topic": topic_counter,
                 "risk_level": risk_counter,
-                "final_judgment": judgment_counter,
-                "handling_suggestion": handling_counter,
+                "event_judgment": judgment_counter,
+                "recommended_action": handling_counter,
             },
         ),
         "quality_status": _quality_status(missing, duplicate_ids, duplicate_payloads, label_errors, public_multitask_leaks),
@@ -178,9 +206,10 @@ def _text_fragments(value: Any) -> list[str]:
 
 def _case_hash(row: dict[str, Any]) -> str:
     content = {
-        "audit_scene": row.get("audit_scene", {}),
-        "chat_evidence_list": row.get("chat_evidence_list", []),
-        "behavior_abnormal_list": row.get("behavior_abnormal_list", []),
+        "service_context": row.get("service_context") or row.get("audit_scene", {}),
+        "conversation_evidence": row.get("conversation_evidence")
+        or row.get("chat_evidence_list", []),
+        "fault_evidence": row.get("fault_evidence") or row.get("behavior_abnormal_list", []),
         "label": row.get("label", {}),
     }
     payload = json.dumps(content, ensure_ascii=False, sort_keys=True)

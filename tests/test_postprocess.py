@@ -1,106 +1,121 @@
-"""Tests for postprocessing and routing logic."""
+"""Tests for AutoCare postprocessing and routing logic."""
 
-import pytest
-
-from im_guard_ml.postprocess import postprocess_model_output, route_policy, PostprocessResult
+from im_guard_ml.postprocess import postprocess_model_output, route_policy
 
 
 class TestRoutePolicy:
-    def test_ignore_routes_to_auto_close(self):
-        label = {"handling_suggestion": "ignore"}
-        route, action = route_policy(label)
-        assert route == "auto_close"
-        assert action == "ignore"
+    def test_information_reply_routes(self):
+        label = {"recommended_action": "information_reply"}
+        route, action, requires_human, *_ = route_policy(label)
+        assert route == "information_flow"
+        assert action == "information_reply_candidate"
+        assert requires_human is False
 
-    def test_warning_routes_to_auto_action(self):
-        label = {"handling_suggestion": "warning"}
-        route, action = route_policy(label)
-        assert route == "auto_action"
-        assert action == "send_warning"
+    def test_collect_evidence_routes(self):
+        label = {"recommended_action": "collect_more_evidence"}
+        route, action, requires_human, *_ = route_policy(label)
+        assert route == "collect_evidence"
+        assert action == "request_more_evidence"
+        assert requires_human is False
 
-    def test_limit_routes_to_policy_action(self):
-        label = {"handling_suggestion": "limit_account"}
-        route, action = route_policy(label)
-        assert route == "policy_action"
-        assert action == "limit_account_candidate"
+    def test_work_order_routes(self):
+        label = {"recommended_action": "create_work_order"}
+        route, action, *_ = route_policy(label)
+        assert route == "work_order_queue"
+        assert action == "create_work_order_candidate"
 
-    def test_ban_routes_to_human_review(self):
-        label = {"handling_suggestion": "ban_account"}
-        route, action = route_policy(label)
-        assert route == "human_review_required"
-        assert action == "review_before_ban"
+    def test_emergency_routes_to_review(self):
+        label = {"recommended_action": "emergency_review"}
+        route, action, requires_human, role, priority, _ = route_policy(label)
+        assert route == "review_queue"
+        assert action == "await_human_confirmation"
+        assert requires_human is True
+        assert role == "safety_reviewer"
+        assert priority == "urgent"
 
     def test_unknown_routes_to_fallback(self):
-        label = {"handling_suggestion": "unknown_value"}
-        route, action = route_policy(label)
+        label = {"recommended_action": "unknown_value"}
+        route, action, requires_human, *_ = route_policy(label)
         assert route == "fallback_or_review"
         assert action == "defer_to_rule_engine"
+        assert requires_human is True
 
-    def test_errors_with_ban_routes_to_human_review(self):
-        label = {"handling_suggestion": "ban_account"}
-        route, action = route_policy(label, errors=["some error"])
-        assert route == "human_review_required"
+    def test_errors_with_emergency_stay_in_review(self):
+        label = {"recommended_action": "emergency_review"}
+        route, action, requires_human, *_ = route_policy(label, errors=["some error"])
+        assert route == "review_queue"
+        assert requires_human is True
 
-    def test_errors_without_ban_routes_to_fallback(self):
-        label = {"handling_suggestion": "warning"}
-        route, action = route_policy(label, errors=["some error"])
+    def test_errors_without_emergency_routes_to_fallback(self):
+        label = {"recommended_action": "service_followup"}
+        route, *_ = route_policy(label, errors=["some error"])
         assert route == "fallback_or_review"
 
 
 class TestPostprocessModelOutput:
-    def test_valid_high_risk_ban(self):
-        raw = '{"risk_level": "high_risk", "topic": "代刷/包榜", "correlation_analysis": "test", "final_judgment": "exist_violation", "judgment_basis": "test", "handling_suggestion": "ban_account"}'
+    def test_valid_high_risk_emergency(self):
+        raw = (
+            '{"risk_level": "high_risk", "event_topic": "动力电池与热安全", '
+            '"correlation_analysis": "test", "event_judgment": "risk_event", '
+            '"uncertainty_reason": "test", "recommended_action": "emergency_review", '
+            '"evidence_refs": [{"source": "vehicle_signal_summary", "field": "warning_lights"}]}'
+        )
         case = {
-            "audit_scene": {
-                "behavior_key_summary": {
-                    "gift_total_value": 10000,
-                    "reward_behavior": "持续高频大额打赏。",
-                }
-            },
-            "behavior_abnormal_list": [{"abnormal_type": "大额打赏"}],
+            "vehicle_signal_summary": {"warning_lights": ["电池过热"]},
+            "conversation_evidence": [{"content": "有焦糊味"}],
+            "fault_evidence": [{"fault_domain": "battery", "severity_from_source": "critical"}],
         }
         result = postprocess_model_output(raw, case)
-        assert result.route == "human_review_required"
-        assert result.final_action == "review_before_ban"
+        assert result.route == "review_queue"
+        assert result.final_action == "await_human_confirmation"
+        assert result.requires_human_review is True
         assert result.parse_status == "ok"
 
-    def test_ban_without_behavior_downgrades(self):
-        raw = '{"risk_level": "high_risk", "topic": "代刷/包榜", "correlation_analysis": "test", "final_judgment": "exist_violation", "judgment_basis": "test", "handling_suggestion": "ban_account"}'
+    def test_emergency_without_vehicle_evidence_downgrades(self):
+        # 故意不含 index，避免 parse 阶段因无 case 上下文误判 evidence_refs
+        raw = (
+            '{"risk_level": "high_risk", "event_topic": "动力电池与热安全", '
+            '"correlation_analysis": "test", "event_judgment": "risk_event", '
+            '"uncertainty_reason": "test", "recommended_action": "emergency_review", '
+            '"evidence_refs": [{"source": "conversation_evidence", "field": "content"}]}'
+        )
         case = {
-            "audit_scene": {"behavior_key_summary": {}},
-            "behavior_abnormal_list": [],
+            "vehicle_signal_summary": {},
+            "conversation_evidence": [{"content": "有焦糊味"}],
+            "fault_evidence": [],
         }
         result = postprocess_model_output(raw, case)
-        # Should downgrade to limit_account due to missing behavior evidence
-        assert result.parsed_output["handling_suggestion"] == "limit_account"
-        # Route goes to fallback because there were validation errors
+        assert result.parsed_output["recommended_action"] == "expert_review"
         assert result.parse_status == "corrected"
-        assert "behavior evidence missing" in result.validation_errors[0]
+        assert any("vehicle-side evidence missing" in e for e in result.validation_errors)
 
     def test_safe_prediction(self):
-        raw = '{"risk_level": "low_risk", "topic": "无主题", "correlation_analysis": "", "final_judgment": "not_exist_violation", "judgment_basis": "", "handling_suggestion": "ignore"}'
-        case = {
-            "audit_scene": {"behavior_key_summary": {}},
-            "behavior_abnormal_list": [],
-        }
+        raw = (
+            '{"risk_level": "low_risk", "event_topic": "无风险事件", "correlation_analysis": "", '
+            '"event_judgment": "not_risk_event", "uncertainty_reason": "", '
+            '"recommended_action": "information_reply"}'
+        )
+        case = {"vehicle_signal_summary": {}, "conversation_evidence": [], "fault_evidence": []}
         result = postprocess_model_output(raw, case)
-        assert result.route == "auto_close"
+        assert result.route == "information_flow"
         assert result.parse_status == "ok"
 
     def test_parse_failure_defaults_safe(self):
         raw = "completely broken output"
-        case = {
-            "audit_scene": {"behavior_key_summary": {}},
-            "behavior_abnormal_list": [],
-        }
+        case = {"vehicle_signal_summary": {}, "conversation_evidence": [], "fault_evidence": []}
         result = postprocess_model_output(raw, case)
-        assert result.parsed_output["final_judgment"] == "not_exist_violation"
-        assert result.route == "auto_close"
+        assert result.parsed_output["event_judgment"] == "not_risk_event"
+        assert result.route == "information_flow"
 
     def test_to_dict(self):
-        raw = '{"risk_level": "low_risk", "topic": "无主题", "correlation_analysis": "", "final_judgment": "not_exist_violation", "judgment_basis": "", "handling_suggestion": "ignore"}'
+        raw = (
+            '{"risk_level": "low_risk", "event_topic": "无风险事件", "correlation_analysis": "", '
+            '"event_judgment": "not_risk_event", "uncertainty_reason": "", '
+            '"recommended_action": "information_reply"}'
+        )
         result = postprocess_model_output(raw, {})
         d = result.to_dict()
         assert "route" in d
         assert "parse_status" in d
+        assert "requires_human_review" in d
         assert "risk_level" in d

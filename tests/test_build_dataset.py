@@ -14,13 +14,13 @@ def test_xguard_safe_maps_to_safe_default():
 
     result = normalize_xguard(row)
 
-    assert result["label"]["final_judgment"] == "not_exist_violation"
+    assert result["label"]["event_judgment"] == "not_risk_event"
     assert result["label"]["risk_level"] == "low_risk"
-    assert result["label"]["handling_suggestion"] == "ignore"
-    assert result["label"]["topic"] == "无主题"
+    assert result["label"]["recommended_action"] == "information_reply"
+    assert result["label"]["event_topic"] == "无风险事件"
 
 
-def test_xguard_risk_maps_to_public_binary_warning_only():
+def test_xguard_risk_maps_to_public_binary_followup_only():
     row = {
         "id": "risk-1",
         "sample_type": "general",
@@ -34,11 +34,10 @@ def test_xguard_risk_maps_to_public_binary_warning_only():
     result = normalize_xguard(row)
 
     assert result["task_type"] == "public_binary"
-    assert result["label"]["final_judgment"] == "exist_violation"
+    assert result["label"]["event_judgment"] == "risk_event"
     assert result["label"]["risk_level"] == "mid_risk"
-    assert result["label"]["handling_suggestion"] == "warning"
-    assert result["label"]["topic"] == "诈骗引流"
-    assert result["label"]["handling_suggestion"] not in {"limit_account", "ban_account"}
+    assert result["label"]["recommended_action"] == "service_followup"
+    assert result["label"]["recommended_action"] not in {"create_work_order", "emergency_review"}
 
 
 def test_xguard_stage_text_joining():
@@ -53,6 +52,7 @@ def test_dedupe_rows_removes_duplicate_training_payloads():
     row = normalize_xguard({"prompt": "same", "stage": "q", "label": "sec"})
     duplicate = dict(row)
     duplicate["ticket_id"] = "different-id"
+    duplicate["case_id"] = "different-id"
 
     assert len(dedupe_rows([row, duplicate])) == 1
 
