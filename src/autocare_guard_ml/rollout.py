@@ -104,7 +104,7 @@ def build_ab_report(
     }
 
 
-def render_ab_report_markdown(report: dict[str, Any], *, title: str = "AutoCare-Guard-ML A/B 灰度对比报告") -> str:
+def render_ab_report_markdown(report: dict[str, Any], *, title: str = "智能汽车服务风险决策平台 A/B 灰度对比报告") -> str:
     lines = [
         f"# {title}",
         "",

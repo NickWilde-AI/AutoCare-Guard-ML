@@ -4,6 +4,7 @@
 
 | 日期 | 变更项 | 版本 | 原因 | 影响范围 | 验证方式 | 回滚方式 |
 | --- | --- | --- | --- | --- | --- | --- |
+| 2026-09-01 | 命名对齐：中文名「智能汽车服务风险决策平台」、英文名 AutoCare Risk Intelligence Platform | docs / API title / 报告标题 | 统一对外正式名；GitHub/模型仓库仍为 AutoCare-Guard-ML，包目录仍为 autocare_guard_ml | 文档开篇、pyproject description、FastAPI title、默认报告标题、看板标题 | 文档与字符串核对 | 回退对应文案变更 |
 | 2026-09-01 | 领域对齐 AutoCare 售后风险研判 | prompt-autocare-v1 / rubric-autocare-v1 / feature-schema-autocare-v1 / postprocess-autocare-v1 | schema/策略/配置/测试对齐新能源汽车售后事件研判与工单路由；保留 legacy 输入字段兼容 | 输出协议、标签体系、路由门禁、配置默认值、公开文档与测试口径 | `make enterprise-check`；API 新旧字段兼容回归 | 回退对应 git commit |
 | 2026-06-06 | 接入 XGuard 公开数据映射 | rubric-v1 / feature-schema-v1 | 补充公开安全识别底座 | 训练数据构建，不影响强处置标签 | `audit-data` 通过，公开数据强处置泄漏为 0 | 移除 `--public-xguard` 输入 |
 | 2026-06-06 | API 增加鉴权、限流、请求大小限制、审计查询 | postprocess-v1 | 提升生产化展示可信度 | FastAPI 服务入口 | `make test`，API 集成测试通过 | 清空对应环境变量或回退服务版本 |

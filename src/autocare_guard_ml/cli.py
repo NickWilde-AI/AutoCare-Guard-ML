@@ -35,14 +35,14 @@ def main(argv: list[str] | None = None) -> int:
     p_eval_report = sub.add_parser("eval-report")
     p_eval_report.add_argument("pred_jsonl")
     p_eval_report.add_argument("--out", default="outputs/offline_eval_report.md")
-    p_eval_report.add_argument("--title", default="AutoCare-Guard-ML 离线评测报告")
+    p_eval_report.add_argument("--title", default="智能汽车服务风险决策平台 离线评测报告")
 
     p_ab = sub.add_parser("ab-report")
     p_ab.add_argument("--control", required=True, help="Control prediction JSONL with label/prediction fields.")
     p_ab.add_argument("--candidate", required=True, help="Candidate prediction JSONL with label/prediction fields.")
     p_ab.add_argument("--out", default="outputs/ab_report.md")
     p_ab.add_argument("--json-out", help="Optional machine-readable JSON report path.")
-    p_ab.add_argument("--title", default="AutoCare-Guard-ML A/B 灰度对比报告")
+    p_ab.add_argument("--title", default="智能汽车服务风险决策平台 A/B 灰度对比报告")
 
     p_api_contract = sub.add_parser("api-contract")
     p_api_contract.add_argument("--out", default="outputs/openapi_contract.json")

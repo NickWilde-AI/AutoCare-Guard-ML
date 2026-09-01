@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "autocare-guard-ml"
 version = "0.1.0"
-description = "AutoCare：新能源汽车售后风险智能研判与工单路由的多证据 LLM Judge 工程框架。"
+description = "智能汽车服务风险决策平台（AutoCare Risk Intelligence Platform）：新能源汽车售后风险智能研判与工单路由的多证据 LLM Judge 工程框架。仓库 AutoCare-Guard-ML。"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Chen Peng" }]

@@ -2,7 +2,7 @@
 
 本文档说明 FastAPI 售后风险研判服务的接口、鉴权、错误码、审计查询和运维检查方式。它面向生产化展示和接入评审，不替代真实生产网关、密钥系统或集中权限平台。
 
-领域口径为 AutoCare（新能源汽车售后风险研判与工单路由）。项目名 `AutoCare-Guard-ML`，包名 `autocare_guard_ml`，CLI `autocare-guard`。请求与响应同时接受 legacy 输入字段兼容（如 `ticket_id`、`chat_evidence_list`、`final_judgment`、`handling_suggestion`）。
+领域口径为智能汽车服务风险决策平台（AutoCare Risk Intelligence Platform）。GitHub / 模型仓库 `AutoCare-Guard-ML`，包名 `autocare_guard_ml`，CLI `autocare-guard`。请求与响应同时接受 legacy 输入字段兼容（如 `ticket_id`、`chat_evidence_list`、`final_judgment`、`handling_suggestion`）。
 
 ## 启动
 

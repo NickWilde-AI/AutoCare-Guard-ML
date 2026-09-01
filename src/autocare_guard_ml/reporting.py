@@ -51,7 +51,7 @@ LOCAL_DATA_FILES = {
 }
 
 
-def build_offline_eval_report(rows: list[dict[str, Any]], *, title: str = "AutoCare-Guard-ML 离线评测报告") -> str:
+def build_offline_eval_report(rows: list[dict[str, Any]], *, title: str = "智能汽车服务风险决策平台 离线评测报告") -> str:
     pairs = [row for row in rows if "label" in row and "prediction" in row]
     gold = [row["label"] for row in pairs]
     pred = [row["prediction"] for row in pairs]
@@ -148,7 +148,7 @@ def _fmt(value: Any) -> str:
 def build_delivery_summary(project_root: str | Path = ".") -> str:
     root = Path(project_root)
     lines = [
-        "# AutoCare-Guard-ML 企业级生产化交付摘要",
+        "# 智能汽车服务风险决策平台 企业级生产化交付摘要",
         "",
         f"- 生成时间：{datetime.now(UTC).isoformat()}",
         "",

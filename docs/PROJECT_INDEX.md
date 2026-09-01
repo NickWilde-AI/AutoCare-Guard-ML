@@ -6,7 +6,9 @@
 
 | 项 | 取值 |
 | --- | --- |
-| 项目名 | AutoCare-Guard-ML |
+| 中文名 | 智能汽车服务风险决策平台 |
+| 英文名 | AutoCare Risk Intelligence Platform |
+| GitHub / 模型仓库 | AutoCare-Guard-ML |
 | 包名 / CLI | `autocare_guard_ml` / `autocare-guard` |
 | 领域 | 新能源汽车售后风险智能研判与工单路由 |
 | 环境变量前缀 | `AUTOCARE_GUARD_*` |

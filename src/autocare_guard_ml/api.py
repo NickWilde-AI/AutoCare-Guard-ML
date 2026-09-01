@@ -79,7 +79,7 @@ def create_app(config_path: str = "configs/default.yaml", model_path: str | None
         judge = HeuristicJudge(rubrics)
     versions = version_info_from_config(cfg, model_path)
     mode = "api" if api else ("checkpoint" if model_path else "heuristic")
-    app = FastAPI(title="AutoCare Guard ML", version="0.1.0")
+    app = FastAPI(title="AutoCare Risk Intelligence Platform", version="0.1.0")
     auth_config = parse_auth_config(
         os.environ.get("AUTOCARE_GUARD_API_TOKEN", ""),
         os.environ.get("AUTOCARE_GUARD_API_TOKENS", ""),

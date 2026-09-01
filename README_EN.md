@@ -2,67 +2,107 @@
 
 # AutoCare-Guard-ML
 
-**After-sales vehicle risk judgment and work-order routing for NEV service**
+### AutoCare Risk Intelligence Platform
+**智能汽车服务风险决策平台**
 
-Combine what the owner says with what the vehicle reported into one auditable Judge, then emit structured risk conclusions and routing recommendations.
+<br/>
 
-[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)](https://fastapi.tiangolo.com/)
-[![vLLM](https://img.shields.io/badge/Serving-vLLM-7c3aed)](https://github.com/vllm-project/vllm)
-[![enterprise-check](https://github.com/NickWilde-AI/AutoCare-Guard-ML/actions/workflows/ci.yml/badge.svg)](https://github.com/NickWilde-AI/AutoCare-Guard-ML/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+Fuse what the owner says with what the vehicle reported into one auditable Judge.  
+Emit structured risk conclusions and service routing recommendations.
 
-[中文](README.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Output Protocol](#output-protocol) · [Training](#training--evaluation) · [Enterprise Checks](#enterprise-checks) · [Docs](#documentation)
+<br/>
+
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![vLLM](https://img.shields.io/badge/Serving-vLLM-111111)](https://github.com/vllm-project/vllm)
+[![CI](https://github.com/NickWilde-AI/AutoCare-Guard-ML/actions/workflows/ci.yml/badge.svg)](https://github.com/NickWilde-AI/AutoCare-Guard-ML/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-MIT-2ea44f)](LICENSE)
+
+<br/>
+
+[中文](README.md)
+&nbsp;·&nbsp; [Quick Start](#-quick-start)
+&nbsp;·&nbsp; [Architecture](#-architecture)
+&nbsp;·&nbsp; [Protocol](#-output-protocol)
+&nbsp;·&nbsp; [Training](#-training--evaluation)
+&nbsp;·&nbsp; [Docs](#-documentation)
 
 </div>
 
 ---
 
-This repository is a sanitized engineering implementation of **AutoCare**: multi-evidence dataset building, Qwen LoRA SFT, offline evaluation, inference serving, evidence gates, work-order routing, audit, and monitoring.
+| | |
+| :--- | :--- |
+| **Chinese name** | 智能汽车服务风险决策平台 |
+| **English name** | AutoCare Risk Intelligence Platform |
+| **GitHub / model repo** | [AutoCare-Guard-ML](https://github.com/NickWilde-AI/AutoCare-Guard-ML) |
+| **Python package / CLI** | `autocare_guard_ml` / `autocare-guard` |
 
-**Public boundary**: no raw tickets, owner PII, fault-code dictionaries, production weights, or full production infrastructure. You must supply authorized, redacted data and weights to measure real quality.
+This repository is a **sanitized engineering implementation** of the platform: multi-evidence dataset building, Qwen LoRA SFT, offline evaluation, inference serving, evidence gates, work-order routing, audit, and monitoring.
 
-## Why This Exists
+> **Public boundary**  
+> No raw tickets, owner PII, fault-code dictionaries, production weights, or full production infrastructure.  
+> You must supply authorized, redacted data and weights to measure real quality.
 
-Many after-sales systems stop at text classification: inquiry / complaint / escalate.
+---
 
-Real vehicle risk judgment must answer:
+## Why It Exists
 
-| Question | Why it is hard |
-| --- | --- |
+Most after-sales systems stop at text classification: inquiry / complaint / escalate.  
+Real service risk decisions must answer five questions:
+
+| Decision | Why it is hard |
+| :--- | :--- |
 | Is this a vehicle risk event? | “Cannot charge” may be a schedule setting or an HV alert with thermal rise |
-| How severe is it? | Dialogue must be correlated with vehicle signals, fault evidence, and service history |
-| What should happen next? | Reply, collect more evidence, follow up, create a work order, expert review, or emergency human confirmation |
-| What if evidence is insufficient? | Do not treat it as safe; route to `insufficient_evidence` |
-| How do we stay auditable? | Structured evidence refs, versioned decisions, alerts, and sample feedback loops |
+| How severe is it? | Dialogue must correlate with vehicle signals, faults, and service history |
+| What should happen next? | Reply → collect evidence → follow up → work order → expert review → emergency confirmation |
+| What if evidence is insufficient? | Do not treat it as safe; use `insufficient_evidence` |
+| How do we stay auditable? | Evidence refs, versioned decisions, alerts, and sample feedback |
 
 ```text
 Service case
-  -> conversation + vehicle signal summary + fault evidence + service history
-  -> LLM Judge
-  -> structured judgment JSON
-  -> postprocess / vehicle-side evidence gate
-  -> work-order routing
-  -> audit / metrics / sample feedback
+   │
+   ▼
+conversation + vehicle signals + faults + service history
+   │
+   ▼
+LLM Judge  ──►  structured judgment JSON
+   │
+   ▼
+postprocess / vehicle-side evidence gate
+   │
+   ▼
+work-order routing  ──►  audit · metrics · feedback
 ```
+
+---
 
 ## Highlights
 
-| Capability | What is implemented |
-| --- | --- |
-| Multi-evidence judgment | conversation, vehicle signals, faults, service history |
-| LLM Judge | deterministic rule baseline; Transformers / SFT; OpenAI-compatible API |
-| Training | completion-only SFT, LoRA/PEFT, field-level loss masks for public data |
-| Decision safety | JSON repair, label validation, `emergency_review` vehicle evidence gate |
-| Serving | FastAPI, request_id, token/RBAC, CORS, rate limits, body size limits |
-| Audit | JSONL / SQLite, case lookup, versioned decision records |
-| Monitoring | Prometheus metrics, drift reports, sliding-window alerts |
-| Governance | model registry, promotion guardrails, rollback targets |
-| Delivery gate | `make enterprise-check`, OpenAPI contract, preflight, readiness, CI |
+| Area | What ships |
+| :--- | :--- |
+| Multi-evidence | conversation · vehicle signals · faults · service history |
+| LLM Judge | rule baseline · Transformers / SFT · OpenAI-compatible API |
+| Training | completion-only SFT · LoRA/PEFT · field-level loss masks |
+| Decision safety | JSON repair · label validation · `emergency_review` gate |
+| Serving & audit | FastAPI · request_id · Token/RBAC · JSONL/SQLite |
+| Delivery | Prometheus · model registry · `make enterprise-check` |
+
+---
+
+## Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
+
+```text
+request → evidence → prompt → Judge → parse → postprocess → route → audit → feedback
+```
+
+---
 
 ## Quick Start
 
-No GPU and no fine-tuned checkpoint are required for the local path. A deterministic rule baseline Judge exercises the full pipeline.
+No GPU required for the local path. A deterministic rule baseline exercises the full pipeline.
 
 ```bash
 git clone https://github.com/NickWilde-AI/AutoCare-Guard-ML.git
@@ -76,13 +116,13 @@ python -m pytest tests/ -q
 make readiness-check
 ```
 
-Start the API:
+**Serve**
 
 ```bash
 PYTHONPATH=src autocare-guard --config configs/default.yaml serve --port 8000
 ```
 
-Submit a judgment request:
+**Judge**
 
 ```bash
 curl -X POST http://127.0.0.1:8000/judge \
@@ -105,6 +145,8 @@ curl -X POST http://127.0.0.1:8000/judge \
   }'
 ```
 
+---
+
 ## Output Protocol
 
 ```json
@@ -122,7 +164,9 @@ curl -X POST http://127.0.0.1:8000/judge \
 }
 ```
 
-`emergency_review` is a recommendation for human confirmation. The model does not control the vehicle. Vehicle-side evidence gates protect high-impact actions.
+`emergency_review` is a human-confirmation recommendation. The model does **not** control the vehicle.
+
+---
 
 ## Training & Evaluation
 
@@ -137,9 +181,9 @@ PYTHONPATH=src autocare-guard --config configs/default.yaml \
   train data/train/xguard_splits/train.jsonl
 ```
 
-Recommended metrics: `event_judgment` F1, `risk_level` macro-F1, `recommended_action` macro-F1, `emergency_review` FPR, critical-event recall.
+Recommended metrics: `event_judgment` F1 · `risk_level` macro-F1 · `recommended_action` macro-F1 · `emergency_review` FPR · critical-event recall.
 
-Public binary safety data may enrich recognition coverage, but must not supervise `expert_review` / `emergency_review`.
+---
 
 ## Enterprise Checks
 
@@ -147,21 +191,27 @@ Public binary safety data may enrich recognition coverage, but must not supervis
 make enterprise-check
 ```
 
-Covers unit tests, compileall, OpenAPI contract, production preflight, model registry, delivery summary, and readiness. The same gate runs in GitHub Actions.
+Unit tests, compileall, OpenAPI contract, production preflight, model registry, delivery summary, readiness — also run in GitHub Actions.
+
+---
 
 ## Documentation
 
-| Need | Doc |
-| --- | --- |
-| Map | [docs/PROJECT_INDEX.md](docs/PROJECT_INDEX.md) |
-| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Commands | [docs/COMMANDS.md](docs/COMMANDS.md) |
-| API | [docs/API_USAGE.md](docs/API_USAGE.md) |
-| Training | [docs/TRAINING_AND_EVALUATION.md](docs/TRAINING_AND_EVALUATION.md) |
-| Rubrics | [docs/RUBRIC_AND_LABELING_GUIDE.md](docs/RUBRIC_AND_LABELING_GUIDE.md) |
-| Risk strategy | [docs/RISK_STRATEGY.md](docs/RISK_STRATEGY.md) |
-| Ops | [docs/DEPLOYMENT_AND_OPERATIONS.md](docs/DEPLOYMENT_AND_OPERATIONS.md) |
+| Topic | Doc |
+| :--- | :--- |
+| Map | [PROJECT_INDEX](docs/PROJECT_INDEX.md) |
+| Architecture | [ARCHITECTURE](docs/ARCHITECTURE.md) |
+| Commands | [COMMANDS](docs/COMMANDS.md) |
+| API | [API_USAGE](docs/API_USAGE.md) |
+| Training | [TRAINING_AND_EVALUATION](docs/TRAINING_AND_EVALUATION.md) |
+| Rubrics | [RUBRIC_AND_LABELING_GUIDE](docs/RUBRIC_AND_LABELING_GUIDE.md) |
+| Risk strategy | [RISK_STRATEGY](docs/RISK_STRATEGY.md) |
+| Ops | [DEPLOYMENT_AND_OPERATIONS](docs/DEPLOYMENT_AND_OPERATIONS.md) |
 
-## License
+---
 
-MIT License. See [LICENSE](LICENSE).
+<div align="center">
+
+MIT License · [LICENSE](LICENSE)
+
+</div>
