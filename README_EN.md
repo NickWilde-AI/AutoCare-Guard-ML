@@ -2,15 +2,9 @@
 
 # AutoCare-Guard-ML
 
-### AutoCare Risk Intelligence Platform
-**智能汽车服务风险决策平台**
+**AutoCare Risk Intelligence Platform** · 智能汽车服务风险决策平台
 
-<br/>
-
-Fuse what the owner says with what the vehicle reported into one auditable Judge.  
-Emit structured risk conclusions and service routing recommendations.
-
-<br/>
+Fuse what the owner says with what the vehicle reported into one auditable Judge — structured risk conclusions and service routing recommendations.
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -18,31 +12,15 @@ Emit structured risk conclusions and service routing recommendations.
 [![CI](https://github.com/NickWilde-AI/AutoCare-Guard-ML/actions/workflows/ci.yml/badge.svg)](https://github.com/NickWilde-AI/AutoCare-Guard-ML/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-2ea44f)](LICENSE)
 
-<br/>
-
-[中文](README.md)
-&nbsp;·&nbsp; [Quick Start](#-quick-start)
-&nbsp;·&nbsp; [Architecture](#-architecture)
-&nbsp;·&nbsp; [Protocol](#-output-protocol)
-&nbsp;·&nbsp; [Training](#-training--evaluation)
-&nbsp;·&nbsp; [Docs](#-documentation)
+[中文](README.md) · [Quick Start](#quick-start) · [Architecture](#architecture) · [Protocol](#output-protocol) · [Training](#training--evaluation) · [Docs](#documentation)
 
 </div>
 
 ---
 
-| | |
-| :--- | :--- |
-| **Chinese name** | 智能汽车服务风险决策平台 |
-| **English name** | AutoCare Risk Intelligence Platform |
-| **GitHub / model repo** | [AutoCare-Guard-ML](https://github.com/NickWilde-AI/AutoCare-Guard-ML) |
-| **Python package / CLI** | `autocare_guard_ml` / `autocare-guard` |
+Sanitized engineering implementation of **AutoCare Risk Intelligence Platform** (智能汽车服务风险决策平台). Public repo: [AutoCare-Guard-ML](https://github.com/NickWilde-AI/AutoCare-Guard-ML). Package / CLI: `autocare_guard_ml` / `autocare-guard`. Covers multi-evidence datasets, Qwen LoRA SFT, offline eval, serving, evidence gates, work-order routing, audit, and monitoring.
 
-This repository is a **sanitized engineering implementation** of the platform: multi-evidence dataset building, Qwen LoRA SFT, offline evaluation, inference serving, evidence gates, work-order routing, audit, and monitoring.
-
-> **Public boundary**  
-> No raw tickets, owner PII, fault-code dictionaries, production weights, or full production infrastructure.  
-> You must supply authorized, redacted data and weights to measure real quality.
+> **Public boundary** — No raw tickets, owner PII, fault-code dictionaries, production weights, or full production infrastructure. Bring your own authorized, redacted data and weights to measure quality.
 
 ---
 

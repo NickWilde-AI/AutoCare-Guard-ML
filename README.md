@@ -2,15 +2,9 @@
 
 # AutoCare-Guard-ML
 
-### 智能汽车服务风险决策平台
-**AutoCare Risk Intelligence Platform**
+**智能汽车服务风险决策平台** · AutoCare Risk Intelligence Platform
 
-<br/>
-
-把「用户怎么说」与「车辆当时怎样」融合进同一套可审计 Judge，  
-输出结构化风险结论与服务路由建议。
-
-<br/>
+把「用户怎么说」与「车辆当时怎样」融合进同一套可审计 Judge，输出结构化风险结论与服务路由建议。
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -18,31 +12,15 @@
 [![CI](https://github.com/NickWilde-AI/AutoCare-Guard-ML/actions/workflows/ci.yml/badge.svg)](https://github.com/NickWilde-AI/AutoCare-Guard-ML/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-MIT-2ea44f)](LICENSE)
 
-<br/>
-
-[English](README_EN.md)
-&nbsp;·&nbsp; [快速开始](#-快速开始)
-&nbsp;·&nbsp; [架构](#-系统架构)
-&nbsp;·&nbsp; [协议](#-输出协议)
-&nbsp;·&nbsp; [训练](#-训练与评测)
-&nbsp;·&nbsp; [文档](#-文档)
+[English](README_EN.md) · [快速开始](#快速开始) · [架构](#系统架构) · [协议](#输出协议) · [训练](#训练与评测) · [文档](#文档)
 
 </div>
 
 ---
 
-| | |
-| :--- | :--- |
-| **中文名** | 智能汽车服务风险决策平台 |
-| **英文名** | AutoCare Risk Intelligence Platform |
-| **GitHub / 模型仓库** | [AutoCare-Guard-ML](https://github.com/NickWilde-AI/AutoCare-Guard-ML) |
-| **Python 包 / CLI** | `autocare_guard_ml` / `autocare-guard` |
+本仓库是 **智能汽车服务风险决策平台**（AutoCare Risk Intelligence Platform）的脱敏工程实现，公开仓库为 [AutoCare-Guard-ML](https://github.com/NickWilde-AI/AutoCare-Guard-ML)；包名 / CLI 为 `autocare_guard_ml` / `autocare-guard`。覆盖多证据样本构建、Qwen LoRA SFT、离线评测、推理服务、证据门禁、工单路由、审计与监控。
 
-本仓库是上述平台的**脱敏工程实现**：多证据样本构建、Qwen LoRA SFT、离线评测、推理服务、证据门禁、工单路由、审计与监控。
-
-> **公开边界**  
-> 不含原始工单、车主身份、故障码字典、生产权重与完整生产基础设施。  
-> 效果评估需自备已授权且脱敏的数据与模型。
+> **公开边界** — 不含原始工单、车主身份、故障码字典、生产权重与完整生产基础设施；效果评估需自备已授权且脱敏的数据与模型。
 
 ---
 
